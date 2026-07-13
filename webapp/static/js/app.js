@@ -339,7 +339,7 @@ function buildTraces() {
       },
       customdata: cs.chl,
       hovertemplate: "<b>葉綠素-a</b> %{customdata:.3f} mg/m³<br>" +
-        "%{x:.2f}°E, %{y:.2f}°N<extra>MODIS 水色</extra>",
+        "%{x:.2f}°E, %{y:.2f}°N<extra>VIIRS 水色</extra>",
       showlegend: false, name: "Chl",
     });
   }
@@ -850,7 +850,7 @@ async function predictHabitat(species) {
   }
 }
 
-// ── Download latest MODIS (Chl-a) / SSHA and display as main field ──
+// ── Download latest VIIRS (Chl-a) / SSHA and display as main field ──
 async function downloadEnv(dataset, label) {
   showLoading(`下載最新 ${label} …（線上擷取 ERDDAP 子集）`);
   setConnBusy(true, "下載中");
@@ -911,7 +911,7 @@ function wireUp() {
   if ($("btnPredictSkj")) $("btnPredictSkj").onclick = () => predictHabitat("skipjack");
   if ($("btnPredictYft")) $("btnPredictYft").onclick = () => predictHabitat("yellowfin");
 
-  if ($("btnDownloadModis")) $("btnDownloadModis").onclick = () => downloadEnv("chl", "MODIS 水色");
+  if ($("btnDownloadModis")) $("btnDownloadModis").onclick = () => downloadEnv("chl", "VIIRS 水色");
   if ($("btnDownloadSsha")) $("btnDownloadSsha").onclick = () => downloadEnv("ssh", "SSHA 海面高度距平");
 }
 

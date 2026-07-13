@@ -51,10 +51,11 @@ DATASETS = {
         "name": "NOAA Geo-Polar Blended（5km）", "default_stride": 2,
     },
     "chl": {
-        "id": "erdMH1chla1day_R2022SQ", "var": "chlor_a",
-        "kind": "chl", "name": "MODIS Aqua 葉綠素-a 海洋水色（4km）",
+        "id": "noaacwNPPVIIRSSQchlaDaily", "var": "chlor_a",
+        "kind": "chl", "name": "VIIRS S-NPP 葉綠素-a 海洋水色（4km）",
         "default_stride": 6,   # 4km × 6 ≈ 0.25°
-        "fallback_days": 60,   # MODIS NRT 延遲較大，放寬回退天數
+        "fallback_days": 60,   # 科學品質(SQ)延遲較大，放寬回退天數
+        "hosts": ["https://coastwatch.noaa.gov/erddap/griddap"],
     },
     "ssh": {
         "id": "noaacwBLENDEDsshDaily", "var": "sla", "kind": "ssh",
