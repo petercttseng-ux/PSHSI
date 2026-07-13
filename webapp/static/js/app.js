@@ -232,7 +232,7 @@ function buildTraces() {
       title: { text: isMuranom ? "距平 ΔSST (°C)"
                  : (isAnom ? "ΔSST (°C)"
                  : (isChl ? "Chl (mg/m³)"
-                 : (isSsh ? "SLA (m)"
+                 : (isSsh ? "SLA (cm)"
                  : (isSpd ? "流速 (m/s)"
                  : (isDhw ? "DHW (°C·週)" : "SST (°C)"))))),
                font: { color: "#e2e8f0", size: 12 } },

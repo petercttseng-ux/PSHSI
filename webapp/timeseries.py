@@ -59,7 +59,7 @@ DATASETS = {
     },
     "ssh": {
         "id": "noaacwBLENDEDsshDaily", "var": "sla", "kind": "ssh",
-        "name": "SSH 海面高度距平 SLA（測高，25km）", "default_stride": 1,
+        "name": "SSHA 海面高度距平（MEaSUREs，Earthdata）", "default_stride": 1,
         "hosts": ["https://coastwatch.noaa.gov/erddap/griddap"],
     },
     "currents": {
@@ -88,6 +88,27 @@ STATIONS_FILE = PROJECT_ROOT / "stations.json"
 _stations_lock = threading.Lock()
 
 MAX_DAYS = 92  # safety cap for one animation request
+
+# ── Data source: NASA Earthdata OPeNDAP (機關網路無法連 NOAA ERDDAP) ─────────
+# SST / Chl-a / SSHA 皆改由 NASA Earthdata 以 OPeNDAP 伺服器端裁切取得。
+# 其餘資料集（oisst/blended/currents/muranom/dhw）維持 ERDDAP。
+USE_EARTHDATA = True
+_EARTHDATA_MAP = {"mur": "sst", "chl": "chl", "ssh": "ssh"}
+
+
+def _write_grid_nc(dest: pathlib.Path, lat, lon, arr, varname: str) -> None:
+    """Write a 2-D (lat, lon) grid to a cache NetCDF that load_day can read."""
+    out = nc.Dataset(str(dest), "w", format="NETCDF4")
+    try:
+        out.createDimension("lat", lat.size)
+        out.createDimension("lon", lon.size)
+        vla = out.createVariable("latitude", "f8", ("lat",)); vla[:] = lat
+        vlo = out.createVariable("longitude", "f8", ("lon",)); vlo[:] = lon
+        vv = out.createVariable(varname, "f4", ("lat", "lon"),
+                                zlib=True, fill_value=np.float32(np.nan))
+        vv[:] = np.asarray(arr, dtype=np.float32)
+    finally:
+        out.close()
 
 
 # ── ERDDAP fetching ────────────────────────────────────────────────────────
@@ -204,6 +225,22 @@ def fetch_day(date: str, stride: int, log: Callable[[str], None],
     dest = TS_DIR / f"{dataset}_s{stride}_{date.replace('-', '')}.nc"
     if dest.exists() and dest.stat().st_size > 1000:
         return dest
+
+    # ── NASA Earthdata OPeNDAP path (SST / Chl-a / SSHA) ──────────────────
+    if USE_EARTHDATA and dataset in _EARTHDATA_MAP:
+        try:
+            import earthdata as ed
+            lat, lon, arr, gdate = ed.fetch_region_day(
+                _EARTHDATA_MAP[dataset], date, log, stride=stride)
+            if arr is None:
+                log(f"  ⚠️ {date} Earthdata 無 {dataset} 可用 granule")
+                return None
+            _write_grid_nc(dest, lat, lon, arr, ds["var"])
+            return dest
+        except Exception as e:
+            log(f"  ⚠️ {date} Earthdata {dataset} 擷取失敗：{e}")
+            return None
+
     windows = _lon_windows()
     last_err = None
     for host in ds.get("hosts", ERDDAP_HOSTS):
@@ -444,7 +481,7 @@ def export_gif(stack: SeriesStack, out_path: pathlib.Path,
             np.abs([stack.anomaly(i, baseline) for i in range(stack.nframes)]), 98)))
         vmin, vmax = -amax, amax
     elif kind == "ssh":
-        cmap, label = "RdBu_r", "SLA (m)"
+        cmap, label = "RdBu_r", "SLA (cm)"
         amax = max(0.1, float(np.nanpercentile(np.abs(stack.data), 98)))
         vmin, vmax = -amax, amax
     elif kind == "speed":
