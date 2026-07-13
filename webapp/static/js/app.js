@@ -316,10 +316,10 @@ function buildTraces() {
     });
   }
 
-  // Chlorophyll overlay：綠色空心圓，圓越大＝濃度越高（僅顯示 ≥0.5 mg/m³）
+  // Chlorophyll overlay：綠色空心圓，圓越大＝濃度越高（僅顯示 ≥0.1 mg/m³）
   if (state.chlOverlay && state.chlOverlay.chl && !isChl) {
     const cs = state.chlOverlay;
-    const thr = cs.threshold ?? 0.5;
+    const thr = cs.threshold ?? 0.1;
     // 以 log10(chl) 線性映射到圓徑，再乘上使用者選的圓圈大小倍率
     const lmin = Math.log10(thr), lmax = Math.log10(10);
     const k = state.chlScale || 1.0;
