@@ -417,15 +417,33 @@ function buildTraces() {
   return traces;
 }
 
+// 依目前顯示的圖層自動決定標題（SST／Chl-a／SSHA／漁場預測…）
+function plotTitleText() {
+  const s = state.sst;
+  if (!s) return "";
+  const dateSpan = `　<span style="color:#94a3b8">${s.date || ""}</span>`;
+  if (s.kind === "hsi") {
+    return `<b>${s.name_zh || ""}漁場預測 (ECDF-HSI)</b>${dateSpan}`;
+  }
+  if (s.anomaly) return `<b>海面水溫距平 ΔSST (°C)</b>${dateSpan}`;
+  const labels = {
+    sst: "海面水溫 SST (°C)｜OSTIA",
+    chl: "葉綠素-a Chl-a (mg/m³)｜GlobColour",
+    ssh: "海面高度距平 SSHA (cm)｜DUACS",
+    speed: "表面流速 (m/s)",
+    anom: "海面水溫距平 ΔSST (°C)",
+    dhw: "累積熱壓力 DHW (°C·週)",
+  };
+  return `<b>${labels[s.kind] || "海面水溫 SST (°C)"}</b>${dateSpan}`;
+}
+
 function plotLayout(preserveAxes = false) {
   const layout = {
     paper_bgcolor: "#050d1a",
     plot_bgcolor:  "#07172e",
     margin: { t: 50, b: 50, l: 56, r: 26 },
     title: state.sst ? {
-      text: (state.sst.kind === "hsi"
-        ? `<b>${state.sst.name_zh || ""}漁場預測 (ECDF-HSI)</b>　<span style="color:#94a3b8">${state.sst.date || ""}</span>`
-        : `<b>GHRSST Level-4 MUR SST Analysis (v4.1)</b>　<span style="color:#94a3b8">${state.sst.date || ""}</span>`),
+      text: plotTitleText(),
       font: { color: "#e2e8f0", size: 14, family: "Inter, Noto Sans TC" },
       x: 0.5, xanchor: "center",
     } : "",
