@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GHRSST MUR 海面水溫展示系統 — 農業部水產試驗所</title>
+  <link rel="icon" type="image/jpeg" href="{{ url_for('static', filename='img/fri_logo.jpg') }}" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+</head>
+<body>
+
+<!-- ╔══ HEADER ══════════════════════════════════════════════════ ╗ -->
+<header class="app-header">
+  <div class="header-left">
+    <img src="{{ url_for('static', filename='img/fri_logo.jpg') }}"
+         alt="水產試驗所 Logo" class="logo" />
+    <div class="title-block">
+      <h1 class="title">
+        <span class="wave">🌊</span>
+        GHRSST&nbsp;Level-4&nbsp;MUR 海面水溫展示系統
+      </h1>
+      <p class="subtitle">
+        Marine Environmental Research · 農業部水產試驗所 漁海況研究小組
+      </p>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="status-pill" id="connectionStatus">
+      <span class="dot"></span>
+      <span class="pill-text">系統就緒</span>
+    </div>
+    <div class="meta-block">
+      <div class="meta-row"><span class="meta-label">資料日期</span><span id="hdrDate" class="meta-value">—</span></div>
+      <div class="meta-row"><span class="meta-label">資料來源</span><span class="meta-value">NASA JPL · MUR v4.1</span></div>
+    </div>
+  </div>
+</header>
+
+<!-- ╔══ MAIN ═══════════════════════════════════════════════════ ╗ -->
+<main class="app-main">
+
+  <!-- ── SIDEBAR ─────────────────────────────────────────────── -->
+  <aside class="sidebar">
+
+    <!-- Card: Data management -->
+    <section class="card">
+      <h2 class="card-title">📡 資料管理</h2>
+      <div class="card-body">
+        <button class="btn btn-primary" id="btnDownload">
+          <span class="btn-icon">⬇</span><span>下載最新 MUR SST</span>
+        </button>
+        <div class="progress-wrapper hidden" id="progressWrapper">
+          <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+          <div class="progress-label" id="progressLabel">0%</div>
+        </div>
+
+        <label class="btn btn-secondary" for="fileInput">
+          <span class="btn-icon">📂</span><span>開啟本機 .nc 檔</span>
+          <input type="file" id="fileInput" accept=".nc,.nc4" hidden />
+        </label>
+
+        <details class="local-files">
+          <summary>本機已下載檔案</summary>
+          <div class="file-list" id="fileList">
+            <div class="muted">— 無資料 —</div>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <!-- Card: Fishing-ground prediction (ECDF-HSI) -->
+    <section class="card hsi-card">
+      <h2 class="card-title">🎯 漁場預測 (ECDF-HSI)</h2>
+      <div class="card-body">
+        <p class="hint">依 1998–2007 漁獲 CPUE 之經驗累積分布函數(ECDF)推得 SST／Chl-a／SSHA 最適範圍，計算所選日期各海域之棲地適合度機率。</p>
+        <div class="control-row">
+          <label for="hsiDate">預測日期</label>
+          <input type="date" id="hsiDate" />
+        </div>
+        <button class="btn btn-primary" id="btnPredictSkj">
+          <span class="btn-icon">🐟</span><span>正鰹漁場預測（一鍵）</span>
+        </button>
+        <button class="btn btn-primary" id="btnPredictYft">
+          <span class="btn-icon">🐟</span><span>黃鰭鮪漁場預測（一鍵）</span>
+        </button>
+        <div class="progress-wrapper hidden" id="hsiProgressWrapper">
+          <div class="progress-bar"><div class="progress-fill" id="hsiProgressFill"></div></div>
+          <div class="progress-label" id="hsiProgressLabel">擷取海洋環境資料…</div>
+        </div>
+        <div id="hsiLegend" class="hsi-legend hidden"></div>
+        <div id="hsiRanges" class="hsi-ranges muted"></div>
+      </div>
+    </section>
+
+    <!-- Card: Layers -->
+    <section class="card">
+      <h2 class="card-title">🎨 圖層控制</h2>
+      <div class="card-body">
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkIsotherm" checked />
+          <span class="checkmark"></span>
+          <span>等溫線 (Isotherms)</span>
+        </label>
+
+        <div class="control-row">
+          <label for="isoInterval">間距</label>
+          <input type="number" id="isoInterval" min="0.5" max="5" step="0.5" value="2.0" />
+          <span class="unit">°C</span>
+        </div>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkCoastline" checked />
+          <span class="checkmark"></span>
+          <span>海岸線 (Coastline)</span>
+        </label>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkFronts" />
+          <span class="checkmark"></span>
+          <span>海洋前緣 (Fronts)</span>
+        </label>
+
+        <button class="btn btn-secondary" id="btnDetectFronts">
+          <span class="btn-icon">🔍</span><span>執行 Cayula-Cornillon 偵測</span>
+        </button>
+
+        <div class="control-row">
+          <label for="resolutionSelect">顯示解析度</label>
+          <select id="resolutionSelect">
+            <option value="60000">省 (~245×245)</option>
+            <option value="220000" selected>標準 (~470×470)</option>
+            <option value="600000">高 (~775×775)</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- Card: View -->
+    <section class="card">
+      <h2 class="card-title">🔭 視圖操作</h2>
+      <div class="card-body">
+        <div class="btn-row">
+          <button class="btn btn-secondary btn-sm" id="btnReset">🏠 重置</button>
+          <button class="btn btn-secondary btn-sm" id="btnDownloadPNG">💾 PNG</button>
+        </div>
+        <p class="hint">滑鼠滾輪縮放 · 拖曳平移 · 框選放大</p>
+      </div>
+    </section>
+
+    <!-- Card: Statistics -->
+    <section class="card stats-card">
+      <h2 class="card-title">📊 SST 統計</h2>
+      <div class="card-body">
+        <div class="stat-grid">
+          <div class="stat">
+            <div class="stat-label">最低</div>
+            <div class="stat-value cool" id="statMin">—</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">平均</div>
+            <div class="stat-value" id="statMean">—</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">最高</div>
+            <div class="stat-value warm" id="statMax">—</div>
+          </div>
+        </div>
+        <div class="meta-row"><span class="meta-label">資料形狀</span><span class="meta-value mono" id="statShape">—</span></div>
+        <div class="meta-row"><span class="meta-label">顯示降採樣</span><span class="meta-value mono" id="statFactor">—</span></div>
+      </div>
+    </section>
+
+    <!-- Card: Time series / animation -->
+    <section class="card">
+      <h2 class="card-title">🎞 時間序列動畫</h2>
+      <div class="card-body">
+        <div class="control-row">
+          <label for="tsDataset">資料集</label>
+          <select id="tsDataset" style="flex:1"></select>
+        </div>
+        <div class="control-row">
+          <label for="tsStart">起</label>
+          <input type="date" id="tsStart" />
+        </div>
+        <div class="control-row">
+          <label for="tsEnd">迄</label>
+          <input type="date" id="tsEnd" />
+        </div>
+        <div class="control-row">
+          <label for="tsStride">解析度</label>
+          <select id="tsStride">
+            <option value="16">快 (~0.16°)</option>
+            <option value="8" selected>標準 (~0.08°)</option>
+            <option value="4">細 (~0.04°)</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" id="btnSeriesLoad">
+          <span class="btn-icon">⬇</span><span>下載序列 (ERDDAP)</span>
+        </button>
+        <div class="progress-wrapper hidden" id="tsProgressWrapper">
+          <div class="progress-bar"><div class="progress-fill" id="tsProgressFill"></div></div>
+          <div class="progress-label" id="tsProgressLabel">0%</div>
+        </div>
+
+        <div class="series-controls hidden" id="seriesControls">
+          <div class="control-row">
+            <button class="btn btn-secondary btn-sm" id="btnSeriesPlay">▶ 播放</button>
+            <span class="mono" id="seriesDateLabel">—</span>
+          </div>
+          <input type="range" id="seriesSlider" min="0" max="0" value="0" step="1" />
+          <label class="checkbox-row">
+            <input type="checkbox" id="chkAnomaly" />
+            <span class="checkmark"></span>
+            <span>距平模式（vs 前期均值）</span>
+          </label>
+          <div class="control-row">
+            <label for="anomalyBaseline">基準天數</label>
+            <input type="number" id="anomalyBaseline" min="2" max="60" step="1" value="30" />
+            <span class="unit">天</span>
+          </div>
+          <div class="control-row">
+            <label for="gifFps">GIF fps</label>
+            <input type="number" id="gifFps" min="1" max="12" step="1" value="4" />
+            <button class="btn btn-secondary btn-sm" id="btnExportGif">🎬 匯出 GIF</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Card: Analysis tools -->
+    <section class="card">
+      <h2 class="card-title">🧰 分析工具</h2>
+      <div class="card-body">
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkProfile" />
+          <span class="checkmark"></span>
+          <span>剖面模式（點兩點畫線）</span>
+        </label>
+        <p class="hint" id="profileHint" style="display:none">
+          請在地圖上點第一個端點…</p>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkChlOverlay" />
+          <span class="checkmark"></span>
+          <span>海洋水色疊圖（MODIS，≥0.5 綠空心圓，圓越大濃度越高）</span>
+        </label>
+        <div class="control-row">
+          <label for="chlScale">圓圈大小</label>
+          <select id="chlScale">
+            <option value="0.6">小</option>
+            <option value="1.0" selected>中</option>
+            <option value="1.5">大</option>
+            <option value="2.2">特大</option>
+          </select>
+        </div>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkCurrents" />
+          <span class="checkmark"></span>
+          <span>海流向量疊圖（測高地轉流）</span>
+        </label>
+        <div class="control-row">
+          <label for="vecDensity">箭頭密度</label>
+          <select id="vecDensity">
+            <option value="900">疏（~1.5°）</option>
+            <option value="3600" selected>標準（~0.75°）</option>
+            <option value="8000">密（~0.5°，原生半格）</option>
+          </select>
+        </div>
+        <div class="control-row">
+          <label for="vecScale">箭頭大小</label>
+          <select id="vecScale">
+            <option value="0.3">小</option>
+            <option value="0.55" selected>中</option>
+            <option value="0.9">大</option>
+            <option value="1.4">特大</option>
+          </select>
+        </div>
+
+        <button class="btn btn-secondary btn-sm" id="btnFrontsGeojson">
+          🗺 前緣 GeoJSON 匯出
+        </button>
+
+        <div class="control-row">
+          <label for="exportFmt">匯出</label>
+          <select id="exportFmt">
+            <option value="csv">CSV</option>
+            <option value="nc">NetCDF</option>
+            <option value="tif">GeoTIFF</option>
+          </select>
+          <button class="btn btn-secondary btn-sm" id="btnExport">📦 目前視圖</button>
+        </div>
+        <p class="hint">匯出範圍＝目前地圖縮放範圍（GeoTIFF 需 rasterio）</p>
+      </div>
+    </section>
+
+    <!-- Card: Station monitoring -->
+    <section class="card">
+      <h2 class="card-title">📍 定點監測</h2>
+      <div class="card-body">
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkAddStation" />
+          <span class="checkmark"></span>
+          <span>點擊地圖新增測站</span>
+        </label>
+        <div class="control-row">
+          <input type="text" id="stName" placeholder="站名（如 彭佳嶼）" style="flex:1" />
+        </div>
+        <div class="control-row">
+          <label>座標</label>
+          <input type="number" id="stLat" placeholder="緯度" step="0.01" style="width:72px" />
+          <input type="number" id="stLon" placeholder="經度" step="0.01" style="width:72px" />
+        </div>
+        <div class="control-row">
+          <label>警報</label>
+          <input type="number" id="stLow" placeholder="低溫" step="0.5" style="width:72px" />
+          <input type="number" id="stHigh" placeholder="高溫" step="0.5" style="width:72px" />
+          <span class="unit">°C</span>
+        </div>
+        <button class="btn btn-secondary" id="btnAddStation">
+          <span class="btn-icon">＋</span><span>新增測站</span>
+        </button>
+        <div class="file-list" id="stationList">
+          <div class="muted">— 尚無測站 —</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Card: Logs -->
+    <section class="card log-card">
+      <h2 class="card-title">📋 訊息記錄</h2>
+      <div class="card-body">
+        <pre id="logBox" class="log-box"></pre>
+      </div>
+    </section>
+
+  </aside>
+
+  <!-- ── PLOT AREA ───────────────────────────────────────────── -->
+  <section class="plot-area">
+    <div id="plot" class="plot-container"></div>
+
+    <!-- Floating cursor info -->
+    <div class="cursor-info" id="cursorInfo">
+      <div class="ci-row"><span class="ci-label">經度</span><span class="ci-val" id="ciLon">—</span></div>
+      <div class="ci-row"><span class="ci-label">緯度</span><span class="ci-val" id="ciLat">—</span></div>
+      <div class="ci-row big"><span class="ci-label">水溫</span><span class="ci-val" id="ciSst">—</span></div>
+    </div>
+
+    <!-- Legend hint -->
+    <div class="map-overlay-hint">
+      範圍 130°E–150°W · 20°S–20°N (熱帶太平洋鮪釣漁場)
+    </div>
+
+    <!-- Empty state -->
+    <div class="empty-state" id="emptyState">
+      <img src="{{ url_for('static', filename='img/fri_logo.jpg') }}" class="empty-logo" alt="" />
+      <h3>尚未載入資料</h3>
+      <p>請點擊「下載最新 MUR SST」或「開啟本機 .nc 檔」以開始</p>
+    </div>
+
+    <!-- Loading overlay -->
+    <div class="loading-overlay hidden" id="loadingOverlay">
+      <div class="loading-spinner"></div>
+      <div class="loading-text" id="loadingText">處理中…</div>
+    </div>
+  </section>
+
+
+  <!-- Station series modal -->
+  <div class="loading-overlay hidden" id="stationModal" style="z-index:60">
+    <div class="card" style="width:min(720px,92vw)">
+      <h2 class="card-title" id="stationModalTitle">測站時間序列</h2>
+      <div class="card-body">
+        <div id="stationChart" style="width:100%;height:340px"></div>
+        <div id="stationAlertBox" class="hint"></div>
+        <button class="btn btn-secondary btn-sm" id="btnCloseStationModal">✕ 關閉</button>
+      </div>
+    </div>
+  </div>
+  <!-- Transect profile modal -->
+  <div class="loading-overlay hidden" id="profileModal" style="z-index:60">
+    <div class="card" style="width:min(760px,94vw)">
+      <h2 class="card-title" id="profileModalTitle">📏 SST 剖面</h2>
+      <div class="card-body">
+        <div id="profileChart" style="width:100%;height:360px"></div>
+        <div id="profileStats" class="hint"></div>
+        <button class="btn btn-secondary btn-sm" id="btnCloseProfileModal">✕ 關閉</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ╔══ FOOTER ══════════════════════════════════════════════════ ╗ -->
+<footer class="app-footer">
+  <div class="footer-left">
+    <span id="statusBar">就緒 │ 請下載或載入 NetCDF 資料</span>
+  </div>
+  <div class="footer-right">
+    <span class="dim">© 農業部水產試驗所 漁海況研究小組</span>
+    <span class="sep">·</span>
+    <span class="dim">資料來源：NASA JPL PO.DAAC / NOAA CoastWatch</span>
+  </div>
+</footer>
+
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

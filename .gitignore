@@ -1,0 +1,28 @@
+# ── Secrets — NEVER commit ────────────────────────────────────
+earthdata_token.txt
+.netrc
+*.netrc
+*.token
+
+# ── Large / re-downloadable data cache ────────────────────────
+mur_data/
+*.nc
+*.nc4
+*.part
+
+# ── Python build artifacts ────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+build/
+dist/
+*.spec
+build.log
+
+# ── OS / editor temp files ────────────────────────────────────
+~$*
+.DS_Store
+Thumbs.db
+.claude/
+
+# ── Keep: source code, CSV/XLS data, habitat_params.json, docs ─
