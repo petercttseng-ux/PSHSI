@@ -151,29 +151,6 @@
       </div>
     </section>
 
-    <!-- Card: Statistics -->
-    <section class="card stats-card">
-      <h2 class="card-title">📊 SST 統計</h2>
-      <div class="card-body">
-        <div class="stat-grid">
-          <div class="stat">
-            <div class="stat-label">最低</div>
-            <div class="stat-value cool" id="statMin">—</div>
-          </div>
-          <div class="stat">
-            <div class="stat-label">平均</div>
-            <div class="stat-value" id="statMean">—</div>
-          </div>
-          <div class="stat">
-            <div class="stat-label">最高</div>
-            <div class="stat-value warm" id="statMax">—</div>
-          </div>
-        </div>
-        <div class="meta-row"><span class="meta-label">資料形狀</span><span class="meta-value mono" id="statShape">—</span></div>
-        <div class="meta-row"><span class="meta-label">顯示降採樣</span><span class="meta-value mono" id="statFactor">—</span></div>
-      </div>
-    </section>
-
     <!-- Card: Time series / animation -->
     <section class="card">
       <h2 class="card-title">🎞 時間序列動畫</h2>
@@ -295,38 +272,6 @@
           <button class="btn btn-secondary btn-sm" id="btnExport">📦 目前視圖</button>
         </div>
         <p class="hint">匯出範圍＝目前地圖縮放範圍（GeoTIFF 需 rasterio）</p>
-      </div>
-    </section>
-
-    <!-- Card: Station monitoring -->
-    <section class="card">
-      <h2 class="card-title">📍 定點監測</h2>
-      <div class="card-body">
-        <label class="checkbox-row">
-          <input type="checkbox" id="chkAddStation" />
-          <span class="checkmark"></span>
-          <span>點擊地圖新增測站</span>
-        </label>
-        <div class="control-row">
-          <input type="text" id="stName" placeholder="站名（如 彭佳嶼）" style="flex:1" />
-        </div>
-        <div class="control-row">
-          <label>座標</label>
-          <input type="number" id="stLat" placeholder="緯度" step="0.01" style="width:72px" />
-          <input type="number" id="stLon" placeholder="經度" step="0.01" style="width:72px" />
-        </div>
-        <div class="control-row">
-          <label>警報</label>
-          <input type="number" id="stLow" placeholder="低溫" step="0.5" style="width:72px" />
-          <input type="number" id="stHigh" placeholder="高溫" step="0.5" style="width:72px" />
-          <span class="unit">°C</span>
-        </div>
-        <button class="btn btn-secondary" id="btnAddStation">
-          <span class="btn-icon">＋</span><span>新增測站</span>
-        </button>
-        <div class="file-list" id="stationList">
-          <div class="muted">— 尚無測站 —</div>
-        </div>
       </div>
     </section>
 

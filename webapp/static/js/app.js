@@ -645,6 +645,7 @@ async function loadFileList() {
 
 function updateStats() {
   if (!state.sst) return;
+  if (!$("statMin")) return;   // 「SST 統計」面板已移除
   const st = state.sst.stats;
   if (state.sst.kind === "hsi") {
     const f = (v) => (v == null ? "—" : v.toFixed(2));
@@ -1165,11 +1166,7 @@ function wireSeriesAndStations() {
   $("anomalyBaseline").onchange = () => {
     if ($("chkAnomaly").checked) seriesShowFrame(state.seriesIndex);
   };
-
-  $("btnAddStation").onclick = addStationFromForm;
-  $("btnCloseStationModal").onclick = () => $("stationModal").classList.add("hidden");
-
-  loadStations();
+  // 定點監測功能已移除
 }
 
 wireSeriesAndStations();
