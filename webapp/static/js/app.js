@@ -850,6 +850,37 @@ async function predictHabitat(species) {
   }
 }
 
+// ── Download latest MODIS (Chl-a) / SSHA and display as main field ──
+async function downloadEnv(dataset, label) {
+  showLoading(`下載最新 ${label} …（線上擷取 ERDDAP 子集）`);
+  setConnBusy(true, "下載中");
+  try {
+    const d = await api("/api/download/env", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dataset }),
+    });
+    if (!d.ok) throw new Error(d.error || "下載失敗");
+    // 切換主圖層前先清除不適用的疊圖
+    state.fronts = null; state.showFronts = false;
+    if ($("chkFronts")) $("chkFronts").checked = false;
+    state.chlOverlay = null; state.currents = null; state.profileLine = null;
+    state.sst = {
+      kind: d.kind, lon: d.lon, lat: d.lat, values: d.values,
+      stats: d.stats, date: d.date, dataset: d.dataset,
+      factor: 1, shape: [d.lat.length, d.lon.length],
+    };
+    $("hdrDate").textContent = d.date;
+    updateStats();
+    await drawPlot(false);
+    setStatus(`${label} ${d.date}｜範圍 ${d.stats.min}–${d.stats.max}`);
+  } catch (e) {
+    alert(`${label} 下載失敗：` + e.message);
+  } finally {
+    hideLoading(); setConnBusy(false);
+  }
+}
+
 // ── Wire up controls ────────────────────────────────────────
 function wireUp() {
   $("btnDownload").onclick      = startDownload;
@@ -879,6 +910,9 @@ function wireUp() {
 
   if ($("btnPredictSkj")) $("btnPredictSkj").onclick = () => predictHabitat("skipjack");
   if ($("btnPredictYft")) $("btnPredictYft").onclick = () => predictHabitat("yellowfin");
+
+  if ($("btnDownloadModis")) $("btnDownloadModis").onclick = () => downloadEnv("chl", "MODIS 水色");
+  if ($("btnDownloadSsha")) $("btnDownloadSsha").onclick = () => downloadEnv("ssh", "SSHA 海面高度距平");
 }
 
 // ── Init ────────────────────────────────────────────────────

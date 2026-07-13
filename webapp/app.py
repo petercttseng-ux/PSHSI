@@ -661,6 +661,58 @@ def api_overlay_currents():
     return jsonify({"date": actual, "requested": date, **payload})
 
 
+# ── Download latest MODIS (Chl-a) / SSHA and show as the main field ─────────
+def _env_grid_payload(dataset: str, date: str):
+    """Fetch the latest available day (<= date) of an ERDDAP field and build a
+    heatmap payload (kind chl/ssh) for the main map. Returns dict or None."""
+    stride = ts.DATASETS[dataset]["default_stride"]
+    p, actual = ts.fetch_day_fallback(date, stride, log, dataset=dataset)
+    if p is None:
+        return None
+    la, lo, arr = ts.load_day(p, var=ts.DATASETS[dataset]["var"])
+    values = [[None if not np.isfinite(v) else round(float(v), 3) for v in row]
+              for row in arr]
+    fin = arr[np.isfinite(arr)]
+    stats = ({"min": round(float(fin.min()), 3), "max": round(float(fin.max()), 3),
+              "mean": round(float(fin.mean()), 3)} if fin.size else
+             {"min": None, "max": None, "mean": None})
+    return {
+        "lon": [round(float(x), 4) for x in lo],
+        "lat": [round(float(y), 4) for y in la],
+        "values": values,
+        "date": actual,
+        "kind": ts.DATASETS[dataset]["kind"],
+        "dataset": dataset,
+        "dataset_name": ts.DATASETS[dataset]["name"],
+        "stats": stats,
+    }
+
+
+@app.route("/api/download/env", methods=["POST"])
+def api_download_env():
+    """一鍵下載最新 MODIS 水色（chl）或 SSHA 海面高度距平（ssh），顯示為主圖層。"""
+    body = request.get_json(silent=True) or {}
+    dataset = body.get("dataset")
+    if dataset not in ("chl", "ssh"):
+        return jsonify({"ok": False, "error": f"未知資料集：{dataset}"}), 400
+    date = body.get("date") or datetime.date.today().isoformat()
+    label = ts.DATASETS[dataset]["name"]
+    try:
+        log(f"⬇ 下載最新 {label}（起始 {date}，自動回退最新可用日期）…")
+        payload = _env_grid_payload(dataset, date)
+        if payload is None:
+            fb = ts.DATASETS[dataset].get("fallback_days", 7)
+            return jsonify({"ok": False,
+                            "error": f"{date} 起往前 {fb} 天皆無 {label} 資料"}), 502
+        log(f"✅ {label} 就緒：{payload['date']}"
+            f"（範圍 {payload['stats']['min']}–{payload['stats']['max']}）")
+        return jsonify({"ok": True, **payload})
+    except Exception as e:
+        log(f"❌ {label} 下載失敗：{e}")
+        log(traceback.format_exc())
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 # ── Habitat / fishing-ground prediction (漁場預測 · ECDF-HSI) ───────────────
 @app.route("/api/habitat/params")
 def api_habitat_params():
