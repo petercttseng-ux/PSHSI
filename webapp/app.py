@@ -693,7 +693,7 @@ def api_download_env():
     """一鍵下載最新 MODIS 水色（chl）或 SSHA 海面高度距平（ssh），顯示為主圖層。"""
     body = request.get_json(silent=True) or {}
     dataset = body.get("dataset")
-    if dataset not in ("chl", "ssh"):
+    if dataset not in ("mur", "chl", "ssh"):
         return jsonify({"ok": False, "error": f"未知資料集：{dataset}"}), 400
     date = body.get("date") or datetime.date.today().isoformat()
     label = ts.DATASETS[dataset]["name"]

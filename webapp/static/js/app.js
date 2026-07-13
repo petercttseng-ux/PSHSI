@@ -852,13 +852,15 @@ async function predictHabitat(species) {
 
 // ── Download latest VIIRS (Chl-a) / SSHA and display as main field ──
 async function downloadEnv(dataset, label) {
-  showLoading(`下載最新 ${label} …（線上擷取 ERDDAP 子集）`);
+  const dEl = $("dmDate");
+  const date = dEl && dEl.value ? dEl.value : null;
+  showLoading(`下載 ${label}${date ? " " + date : ""} …（Copernicus Marine 伺服器端裁切）`);
   setConnBusy(true, "下載中");
   try {
     const d = await api("/api/download/env", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dataset }),
+      body: JSON.stringify(date ? { dataset, date } : { dataset }),
     });
     if (!d.ok) throw new Error(d.error || "下載失敗");
     // 切換主圖層前先清除不適用的疊圖
@@ -883,7 +885,7 @@ async function downloadEnv(dataset, label) {
 
 // ── Wire up controls ────────────────────────────────────────
 function wireUp() {
-  $("btnDownload").onclick      = startDownload;
+  $("btnDownload").onclick      = () => downloadEnv("mur", "SST（OSTIA）");
   $("btnDetectFronts").onclick  = startFrontDetection;
   $("btnReset").onclick         = () => Plotly.relayout(plotDiv, {
     "xaxis.range": [LON_MIN, LON_MAX], "yaxis.range": [LAT_MIN, LAT_MAX],
@@ -911,16 +913,18 @@ function wireUp() {
   if ($("btnPredictSkj")) $("btnPredictSkj").onclick = () => predictHabitat("skipjack");
   if ($("btnPredictYft")) $("btnPredictYft").onclick = () => predictHabitat("yellowfin");
 
-  if ($("btnDownloadModis")) $("btnDownloadModis").onclick = () => downloadEnv("chl", "VIIRS 水色");
-  if ($("btnDownloadSsha")) $("btnDownloadSsha").onclick = () => downloadEnv("ssh", "SSHA 海面高度距平");
+  if ($("btnDownloadModis")) $("btnDownloadModis").onclick = () => downloadEnv("chl", "Chl-a（GlobColour）");
+  if ($("btnDownloadSsha")) $("btnDownloadSsha").onclick = () => downloadEnv("ssh", "SSHA（SLA）");
 }
 
 // ── Init ────────────────────────────────────────────────────
 async function init() {
   wireUp();
-  // Default the prediction date to today (live SST/Chl/SSHA).
+  // Default the prediction & data-management dates to today.
   const hd = $("hsiDate");
   if (hd && !hd.value) hd.value = new Date().toISOString().slice(0, 10);
+  const dm = $("dmDate");
+  if (dm && !dm.value) dm.value = new Date().toISOString().slice(0, 10);
   await loadHabitatParams();
   renderHsiLegend();
   await fetchCoastline();

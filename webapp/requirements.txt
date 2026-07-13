@@ -7,3 +7,4 @@ cartopy>=0.22
 matplotlib>=3.7
 pillow>=10.0
 truststore>=0.8
+copernicusmarine>=1.3

@@ -1,0 +1,144 @@
+"""
+Copernicus Marine (CMEMS) fetcher — server-side subsetting for SST/Chl-a/SSHA.
+
+The three environmental fields used by the fishing-ground prediction are
+downloaded from the Copernicus Marine Data Store via the official
+`copernicusmarine` Python toolbox (`copernicusmarine.subset`), which subsets
+by variable / bounding box / date on the server and returns a small NetCDF.
+
+Datasets
+  mur (SST) : METOFFICE-GLO-SST-L4-NRT-OBS-SST-V2               analysed_sst (K)
+  chl       : cmems_obs-oc_glo_bgc-plankton_nrt_l4-gapfree-multi-4km_P1D   CHL (mg/m³)
+  ssh       : cmems_obs-sl_glo_phy-ssh_nrt_allsat-l4-duacs-0.25deg_P1D     sla (m→cm)
+
+Authentication: run once on the machine —
+    copernicusmarine login
+(or set COPERNICUSMARINE_SERVICE_USERNAME / _PASSWORD). No credential is
+stored in this repository.
+
+The AOI (20°S–20°N, 130°E–150°W) crosses the 180° dateline; CMEMS grids are
+−180…180, so the request is split into an east (130…180) and a west
+(−180…−150) window and stitched into one ascending 0–360 grid.
+
+Marine Environmental Research, Fisheries Research Institute, MOA.
+"""
+from __future__ import annotations
+
+import pathlib
+import uuid
+from typing import Callable
+
+import numpy as np
+
+try:
+    import netCDF4 as nc
+    HAS_NETCDF4 = True
+except ImportError:
+    HAS_NETCDF4 = False
+
+from sst_processor import LAT_MIN, LAT_MAX, LON_MIN, LON_MAX, DATA_DIR
+
+# Keyed by the same dataset names timeseries.py uses (mur/chl/ssh).
+DATASETS = {
+    "mur": {"dataset_id": "METOFFICE-GLO-SST-L4-NRT-OBS-SST-V2",
+            "var": "analysed_sst", "scale": 1.0},
+    "chl": {"dataset_id": "cmems_obs-oc_glo_bgc-plankton_nrt_l4-gapfree-multi-4km_P1D",
+            "var": "CHL", "scale": 1.0},
+    "ssh": {"dataset_id": "cmems_obs-sl_glo_phy-ssh_nrt_allsat-l4-duacs-0.25deg_P1D",
+            "var": "sla", "scale": 100.0},
+}
+
+TARGET_DEG = 0.1        # subsample the merged grid to ~0.1° for display/HSI
+_CACHE = DATA_DIR / "copernicus"
+_CACHE.mkdir(exist_ok=True)
+
+
+def _lon_windows():
+    """AOI longitude windows in the −180…180 convention used by CMEMS."""
+    if LON_MAX <= 180:
+        return [(LON_MIN, LON_MAX)]
+    # east 130…180  +  west (210−360)…-… → −180…−150
+    return [(LON_MIN, 180.0), (-180.0, LON_MAX - 360.0)]
+
+
+def _subset(**kw):
+    """Call copernicusmarine.subset tolerantly across toolbox versions."""
+    import copernicusmarine as cm
+    last = None
+    for extra in ({"overwrite": True}, {"force_download": True}, {}):
+        try:
+            return cm.subset(**kw, **extra)
+        except TypeError as e:      # unknown kwarg for this version
+            last = e
+            continue
+    if last:
+        raise last
+    return cm.subset(**kw)
+
+
+def _read_nc(path: pathlib.Path, var: str):
+    """Return (lat, lon, arr2d) from a CMEMS subset file (NaN-masked)."""
+    ds = nc.Dataset(str(path))
+    try:
+        latv = ds.variables.get("latitude") or ds.variables.get("lat")
+        lonv = ds.variables.get("longitude") or ds.variables.get("lon")
+        lat = np.array(latv[:], dtype=np.float64)
+        lon = np.array(lonv[:], dtype=np.float64)
+        a = np.squeeze(np.array(ds.variables[var][:], dtype=np.float64))
+        while a.ndim > 2:
+            a = a[0]
+    finally:
+        ds.close()
+    a = np.ma.filled(np.ma.masked_invalid(a), np.nan)
+    return lat, lon, a
+
+
+def fetch_region_day(dataset: str, date: str, log: Callable[[str], None],
+                     stride: int = 1):
+    """Fetch the AOI subset of `dataset` for `date` from Copernicus Marine.
+    Returns (lat, lon0360, arr2d, actual_date) or (None, None, None, None)."""
+    if not HAS_NETCDF4:
+        raise RuntimeError("缺少 netCDF4 套件")
+    cfg = DATASETS[dataset]
+    tag = uuid.uuid4().hex[:8]
+    lon_parts, arr_parts, lat_ref = [], [], None
+    for k, (lo0, lo1) in enumerate(_lon_windows()):
+        out = f"cop_{dataset}_{date.replace('-', '')}_{k}_{tag}.nc"
+        _subset(
+            dataset_id=cfg["dataset_id"],
+            variables=[cfg["var"]],
+            minimum_longitude=lo0, maximum_longitude=lo1,
+            minimum_latitude=LAT_MIN, maximum_latitude=LAT_MAX,
+            start_datetime=f"{date}T00:00:00", end_datetime=f"{date}T23:59:59",
+            output_filename=out, output_directory=str(_CACHE),
+        )
+        p = _CACHE / out
+        if not p.exists():
+            log(f"  ⚠️ Copernicus {dataset} 視窗 {k} 無輸出檔")
+            return None, None, None, None
+        lat, lon, a = _read_nc(p, cfg["var"])
+        try:
+            p.unlink()
+        except OSError:
+            pass
+        lat_ref = lat
+        lon_parts.append(np.where(lon < 0, lon + 360.0, lon))
+        arr_parts.append(a)
+
+    lat = lat_ref
+    lon_all = np.concatenate(lon_parts)
+    arr = np.concatenate(arr_parts, axis=1)
+    order = np.argsort(lon_all, kind="stable")
+    lon_all, arr = lon_all[order], arr[:, order]
+    if lat[0] > lat[-1]:
+        lat, arr = lat[::-1], arr[::-1, :]
+
+    # subsample to ~TARGET_DEG
+    dlat = abs(float(np.median(np.diff(lat)))) if lat.size > 1 else TARGET_DEG
+    step = max(1, int(round(TARGET_DEG / max(dlat, 1e-6))), int(stride) if stride else 1)
+    lat, lon_all, arr = lat[::step], lon_all[::step], arr[::step, ::step]
+
+    arr = np.where(np.isfinite(arr), arr, np.nan) * cfg["scale"]
+    log(f"  ✅ Copernicus {dataset.upper()} {date}："
+        f"{arr.shape[0]}×{arr.shape[1]} 格（{cfg['dataset_id']}）")
+    return lat, lon_all, arr.astype(np.float32), date

@@ -50,20 +50,24 @@
     <section class="card">
       <h2 class="card-title">📡 資料管理</h2>
       <div class="card-body">
+        <div class="control-row">
+          <label for="dmDate">資料日期</label>
+          <input type="date" id="dmDate" />
+        </div>
+        <p class="hint">先選日期，再由 Copernicus Marine 下載該日 SST／Chl-a／SSHA。</p>
         <button class="btn btn-primary" id="btnDownload">
-          <span class="btn-icon">⬇</span><span>下載最新 MUR SST</span>
+          <span class="btn-icon">🌡</span><span>下載 SST（OSTIA）</span>
+        </button>
+        <button class="btn btn-secondary" id="btnDownloadModis">
+          <span class="btn-icon">🟢</span><span>下載 Chl-a（GlobColour）</span>
+        </button>
+        <button class="btn btn-secondary" id="btnDownloadSsha">
+          <span class="btn-icon">🌊</span><span>下載 SSHA（SLA）</span>
         </button>
         <div class="progress-wrapper hidden" id="progressWrapper">
           <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
           <div class="progress-label" id="progressLabel">0%</div>
         </div>
-
-        <button class="btn btn-secondary" id="btnDownloadModis">
-          <span class="btn-icon">🟢</span><span>下載最新 VIIRS 水色</span>
-        </button>
-        <button class="btn btn-secondary" id="btnDownloadSsha">
-          <span class="btn-icon">🌊</span><span>下載最新 SSHA 海面高度距平</span>
-        </button>
 
         <label class="btn btn-secondary" for="fileInput">
           <span class="btn-icon">📂</span><span>開啟本機 .nc 檔</span>

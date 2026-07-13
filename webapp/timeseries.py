@@ -89,10 +89,13 @@ _stations_lock = threading.Lock()
 
 MAX_DAYS = 92  # safety cap for one animation request
 
-# ── Data source: NASA Earthdata OPeNDAP (機關網路無法連 NOAA ERDDAP) ─────────
-# SST / Chl-a / SSHA 皆改由 NASA Earthdata 以 OPeNDAP 伺服器端裁切取得。
-# 其餘資料集（oisst/blended/currents/muranom/dhw）維持 ERDDAP。
-USE_EARTHDATA = True
+# ── Data source for SST / Chl-a / SSHA ──────────────────────────────────────
+# "copernicus" : Copernicus Marine (CMEMS) via copernicusmarine toolbox（預設）
+# "earthdata"  : NASA Earthdata OPeNDAP
+# "erddap"     : NOAA CoastWatch ERDDAP（機關網路多半被擋）
+# 其餘資料集（oisst/blended/currents/muranom/dhw）一律沿用 ERDDAP。
+DATA_SOURCE = "copernicus"
+_REMOTE_DATASETS = {"mur", "chl", "ssh"}
 _EARTHDATA_MAP = {"mur": "sst", "chl": "chl", "ssh": "ssh"}
 
 
@@ -226,19 +229,24 @@ def fetch_day(date: str, stride: int, log: Callable[[str], None],
     if dest.exists() and dest.stat().st_size > 1000:
         return dest
 
-    # ── NASA Earthdata OPeNDAP path (SST / Chl-a / SSHA) ──────────────────
-    if USE_EARTHDATA and dataset in _EARTHDATA_MAP:
+    # ── Remote source path: Copernicus Marine / NASA Earthdata ────────────
+    if DATA_SOURCE in ("copernicus", "earthdata") and dataset in _REMOTE_DATASETS:
         try:
-            import earthdata as ed
-            lat, lon, arr, gdate = ed.fetch_region_day(
-                _EARTHDATA_MAP[dataset], date, log, stride=stride)
+            if DATA_SOURCE == "copernicus":
+                import copernicus as _src
+                lat, lon, arr, gdate = _src.fetch_region_day(
+                    dataset, date, log, stride=stride)
+            else:
+                import earthdata as _src
+                lat, lon, arr, gdate = _src.fetch_region_day(
+                    _EARTHDATA_MAP[dataset], date, log, stride=stride)
             if arr is None:
-                log(f"  ⚠️ {date} Earthdata 無 {dataset} 可用 granule")
+                log(f"  ⚠️ {date} {DATA_SOURCE} 無 {dataset} 可用資料")
                 return None
             _write_grid_nc(dest, lat, lon, arr, ds["var"])
             return dest
         except Exception as e:
-            log(f"  ⚠️ {date} Earthdata {dataset} 擷取失敗：{e}")
+            log(f"  ⚠️ {date} {DATA_SOURCE} {dataset} 擷取失敗：{e}")
             return None
 
     windows = _lon_windows()
