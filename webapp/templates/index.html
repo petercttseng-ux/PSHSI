@@ -69,11 +69,6 @@
           <div class="progress-label" id="progressLabel">0%</div>
         </div>
 
-        <label class="btn btn-secondary" for="fileInput">
-          <span class="btn-icon">📂</span><span>開啟本機 .nc 檔</span>
-          <input type="file" id="fileInput" accept=".nc,.nc4" hidden />
-        </label>
-
         <details class="local-files">
           <summary>本機已下載檔案</summary>
           <div class="file-list" id="fileList">
@@ -316,7 +311,7 @@
     <div class="empty-state" id="emptyState">
       <img src="{{ url_for('static', filename='img/fri_logo.jpg') }}" class="empty-logo" alt="" />
       <h3>尚未載入資料</h3>
-      <p>請點擊「下載最新 MUR SST」或「開啟本機 .nc 檔」以開始</p>
+      <p>請先選擇資料日期，再點擊「下載 SST（OSTIA）」以開始</p>
     </div>
 
     <!-- Loading overlay -->

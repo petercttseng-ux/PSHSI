@@ -904,7 +904,7 @@ function wireUp() {
     if (state.sst) await fetchSST();
   };
 
-  $("fileInput").onchange = (e) => {
+  if ($("fileInput")) $("fileInput").onchange = (e) => {
     const f = e.target.files && e.target.files[0];
     if (f) uploadFile(f);
     e.target.value = "";

@@ -40,8 +40,9 @@ from sst_processor import LAT_MIN, LAT_MAX, LON_MIN, LON_MAX, DATA_DIR
 
 # Keyed by the same dataset names timeseries.py uses (mur/chl/ssh).
 DATASETS = {
+    # OSTIA analysed_sst is in Kelvin → auto-convert to °C (kelvin: True).
     "mur": {"dataset_id": "METOFFICE-GLO-SST-L4-NRT-OBS-SST-V2",
-            "var": "analysed_sst", "scale": 1.0},
+            "var": "analysed_sst", "scale": 1.0, "kelvin": True},
     "chl": {"dataset_id": "cmems_obs-oc_glo_bgc-plankton_nrt_l4-gapfree-multi-4km_P1D",
             "var": "CHL", "scale": 1.0},
     "ssh": {"dataset_id": "cmems_obs-sl_glo_phy-ssh_nrt_allsat-l4-duacs-0.25deg_P1D",
@@ -139,6 +140,14 @@ def fetch_region_day(dataset: str, date: str, log: Callable[[str], None],
     lat, lon_all, arr = lat[::step], lon_all[::step], arr[::step, ::step]
 
     arr = np.where(np.isfinite(arr), arr, np.nan) * cfg["scale"]
+    # OSTIA SST is Kelvin → °C. Guard against a source already in °C by only
+    # subtracting when the field is clearly in Kelvin (mean > 100).
+    if cfg.get("kelvin") and np.isfinite(arr).any() and np.nanmean(arr) > 100:
+        arr = arr - 273.15
+    unit = "°C" if cfg.get("kelvin") else ""
+    rng = ""
+    if np.isfinite(arr).any():
+        rng = f"，值域 {np.nanmin(arr):.2f}~{np.nanmax(arr):.2f}{unit}"
     log(f"  ✅ Copernicus {dataset.upper()} {date}："
-        f"{arr.shape[0]}×{arr.shape[1]} 格（{cfg['dataset_id']}）")
+        f"{arr.shape[0]}×{arr.shape[1]} 格（{cfg['dataset_id']}）{rng}")
     return lat, lon_all, arr.astype(np.float32), date
