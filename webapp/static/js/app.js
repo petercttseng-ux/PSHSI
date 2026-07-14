@@ -523,6 +523,15 @@ async function drawPlot(preserveAxes = false) {
   }
   emptyState.classList.add("hidden");
 
+  // 圖層／單位切換（如 OSTIA 由 K 換算成 °C）時強制重繪，
+  // 否則 Plotly.react 會沿用舊的色標圖例（zmin/zmax 不更新）。
+  const rkey = `${state.sst.kind}|${state.sst.unit || ""}|${!!state.sst.anomaly}`;
+  if (drawPlot._lastKey !== undefined && drawPlot._lastKey !== rkey) {
+    Plotly.purge(plotDiv);
+    plotDiv.__stationClickWired = false;
+  }
+  drawPlot._lastKey = rkey;
+
   // Get current axis ranges if preserving
   let preservedX = null, preservedY = null;
   if (preserveAxes && plotDiv.layout) {
