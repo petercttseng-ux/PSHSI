@@ -224,6 +224,11 @@ function buildTraces() {
     ...(isDiv ? { zmin: -zAbs, zmax: zAbs } : {}),
     ...(isSpd ? { zmin: 0, zmax: Math.max(0.5, state.sst.stats.max ?? 1) } : {}),
     ...(isDhw ? { zmin: 0, zmax: dhwMax } : {}),
+    // 一般 SST（含 OSTIA 原始 K / 換算 °C）：圖例以資料範圍取整，配合當前單位
+    ...((!isDiv && !isChl && !isSpd && !isDhw
+         && state.sst.stats && state.sst.stats.min != null)
+        ? { zmin: Math.floor(state.sst.stats.min),
+            zmax: Math.ceil(state.sst.stats.max) } : {}),
     ...chlExtra,
     zsmooth: "best",
     hoverongaps: false,
