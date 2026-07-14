@@ -40,9 +40,11 @@ from sst_processor import LAT_MIN, LAT_MAX, LON_MIN, LON_MAX, DATA_DIR
 
 # Keyed by the same dataset names timeseries.py uses (mur/chl/ssh).
 DATASETS = {
-    # OSTIA analysed_sst is in Kelvin → auto-convert to °C (kelvin: True).
+    # OSTIA analysed_sst is in Kelvin → the raw file is kept on disk and an
+    # explicit converter (kelvin_to_celsius) produces the °C map values.
     "mur": {"dataset_id": "METOFFICE-GLO-SST-L4-NRT-OBS-SST-V2",
-            "var": "analysed_sst", "scale": 1.0, "kelvin": True},
+            "var": "analysed_sst", "scale": 1.0, "kelvin": True,
+            "keep_raw": True, "raw_prefix": "OSTIA_SST", "raw_units": "kelvin"},
     "chl": {"dataset_id": "cmems_obs-oc_glo_bgc-plankton_nrt_l4-gapfree-multi-4km_P1D",
             "var": "CHL", "scale": 1.0},
     "ssh": {"dataset_id": "cmems_obs-sl_glo_phy-ssh_nrt_allsat-l4-duacs-0.25deg_P1D",
@@ -52,6 +54,34 @@ DATASETS = {
 TARGET_DEG = 0.1        # subsample the merged grid to ~0.1° for display/HSI
 _CACHE = DATA_DIR / "copernicus"
 _CACHE.mkdir(exist_ok=True)
+RAW_DIR = DATA_DIR / "ostia_raw"     # 保留下載的原始 OSTIA 檔（凱氏）
+RAW_DIR.mkdir(exist_ok=True)
+
+
+def kelvin_to_celsius(arr):
+    """自動將凱氏溫度（K）轉為攝氏溫度（°C）：°C = K − 273.15（NaN 保留）。"""
+    a = np.asarray(arr, dtype=np.float64)
+    return np.where(np.isfinite(a), a - 273.15, np.nan)
+
+
+def _save_grid(path, lat, lon, arr, varname, units=""):
+    """把一個 (lat, lon) 網格寫成 NetCDF（供原始資料保存）。"""
+    ds = nc.Dataset(str(path), "w", format="NETCDF4")
+    try:
+        ds.createDimension("lat", lat.size)
+        ds.createDimension("lon", lon.size)
+        vla = ds.createVariable("latitude", "f8", ("lat",)); vla[:] = lat
+        vla.units = "degrees_north"
+        vlo = ds.createVariable("longitude", "f8", ("lon",)); vlo[:] = lon
+        vlo.units = "degrees_east"
+        vv = ds.createVariable(varname, "f4", ("lat", "lon"),
+                               zlib=True, fill_value=np.float32(np.nan))
+        vv[:] = np.asarray(arr, dtype=np.float32)
+        if units:
+            vv.units = units
+        ds.institution = "Copernicus Marine (CMEMS) via FRI MOA"
+    finally:
+        ds.close()
 
 
 def _lon_windows():
@@ -134,17 +164,26 @@ def fetch_region_day(dataset: str, date: str, log: Callable[[str], None],
     if lat[0] > lat[-1]:
         lat, arr = lat[::-1], arr[::-1, :]
 
-    # subsample to ~TARGET_DEG
+    # ── 保存下載的原始資料（OSTIA 為凱氏，未換算）到目錄 ──────────────
+    if cfg.get("keep_raw"):
+        raw = np.where(np.isfinite(arr), arr, np.nan) * cfg["scale"]
+        raw_path = RAW_DIR / f"{cfg.get('raw_prefix', 'RAW')}_{date.replace('-', '')}.nc"
+        _save_grid(raw_path, lat, lon_all, raw, cfg["var"], units=cfg.get("raw_units", ""))
+        log(f"  💾 原始 {cfg.get('raw_prefix')} 已存檔（{cfg.get('raw_units')}）：{raw_path}")
+
+    # subsample to ~TARGET_DEG（供地圖展示與 HSI）
     dlat = abs(float(np.median(np.diff(lat)))) if lat.size > 1 else TARGET_DEG
     step = max(1, int(round(TARGET_DEG / max(dlat, 1e-6))), int(stride) if stride else 1)
     lat, lon_all, arr = lat[::step], lon_all[::step], arr[::step, ::step]
 
     arr = np.where(np.isfinite(arr), arr, np.nan) * cfg["scale"]
-    # OSTIA SST is Kelvin → °C. Guard against a source already in °C by only
-    # subtracting when the field is clearly in Kelvin (mean > 100).
-    if cfg.get("kelvin") and np.isfinite(arr).any() and np.nanmean(arr) > 100:
-        arr = arr - 273.15
-    unit = "°C" if cfg.get("kelvin") else ""
+    # ── 自動換算成攝氏溫度（OSTIA 凱氏 → °C）供右側地圖框展示 ───────────
+    unit = ""
+    if cfg.get("kelvin"):
+        # 只有明顯為凱氏（均值 > 100）時才換算，避免來源已是 °C 時重複扣減。
+        if np.isfinite(arr).any() and np.nanmean(arr) > 100:
+            arr = kelvin_to_celsius(arr)
+        unit = "°C"
     rng = ""
     if np.isfinite(arr).any():
         rng = f"，值域 {np.nanmin(arr):.2f}~{np.nanmax(arr):.2f}{unit}"
