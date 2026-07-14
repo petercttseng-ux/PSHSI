@@ -25,6 +25,7 @@ Marine Environmental Research, Fisheries Research Institute, MOA.
 from __future__ import annotations
 
 import pathlib
+import re
 import uuid
 from typing import Callable
 
@@ -125,8 +126,10 @@ def _read_nc(path: pathlib.Path, var: str):
 
 
 def fetch_region_day(dataset: str, date: str, log: Callable[[str], None],
-                     stride: int = 1):
+                     stride: int = 1, convert: bool = True):
     """Fetch the AOI subset of `dataset` for `date` from Copernicus Marine.
+    `convert=False` returns OSTIA SST in the raw unit (Kelvin) without the
+    °C conversion (the raw file is still saved to disk).
     Returns (lat, lon0360, arr2d, actual_date) or (None, None, None, None)."""
     if not HAS_NETCDF4:
         raise RuntimeError("缺少 netCDF4 套件")
@@ -180,13 +183,51 @@ def fetch_region_day(dataset: str, date: str, log: Callable[[str], None],
     # ── 自動換算成攝氏溫度（OSTIA 凱氏 → °C）供右側地圖框展示 ───────────
     unit = ""
     if cfg.get("kelvin"):
-        # 只有明顯為凱氏（均值 > 100）時才換算，避免來源已是 °C 時重複扣減。
-        if np.isfinite(arr).any() and np.nanmean(arr) > 100:
-            arr = kelvin_to_celsius(arr)
         unit = "°C"
+        if convert and np.isfinite(arr).any() and np.nanmean(arr) > 100:
+            arr = kelvin_to_celsius(arr)
+        elif not convert:
+            unit = "K"      # 保留原始凱氏（供「下載原始」顯示）
     rng = ""
     if np.isfinite(arr).any():
         rng = f"，值域 {np.nanmin(arr):.2f}~{np.nanmax(arr):.2f}{unit}"
     log(f"  ✅ Copernicus {dataset.upper()} {date}："
         f"{arr.shape[0]}×{arr.shape[1]} 格（{cfg['dataset_id']}）{rng}")
     return lat, lon_all, arr.astype(np.float32), date
+
+
+def load_raw_celsius(date: str, log: Callable[[str], None], stride: int = 1):
+    """讀取已保存的 OSTIA 原始檔（凱氏），換算成攝氏並回傳供地圖展示。
+    找不到指定日期時改用最新一個原始檔。
+    Returns (lat, lon0360, arr_celsius, actual_date) or (None, None, None, None)."""
+    if not HAS_NETCDF4:
+        raise RuntimeError("缺少 netCDF4 套件")
+    cfg = DATASETS["mur"]
+    prefix, var = cfg["raw_prefix"], cfg["var"]
+    path = RAW_DIR / f"{prefix}_{date.replace('-', '')}.nc"
+    if not path.exists():
+        files = sorted(RAW_DIR.glob(f"{prefix}_*.nc"))
+        if not files:
+            return None, None, None, None
+        path = files[-1]
+    m = re.search(r"(\d{8})", path.name)
+    actual = f"{m.group(1)[:4]}-{m.group(1)[4:6]}-{m.group(1)[6:8]}" if m else date
+
+    ds = nc.Dataset(str(path))
+    try:
+        latv = ds.variables.get("latitude") or ds.variables.get("lat")
+        lonv = ds.variables.get("longitude") or ds.variables.get("lon")
+        lat = np.array(latv[:], dtype=np.float64)
+        lon = np.array(lonv[:], dtype=np.float64)
+        arr = np.ma.filled(np.ma.masked_invalid(np.squeeze(ds.variables[var][:])), np.nan)
+    finally:
+        ds.close()
+
+    cel = kelvin_to_celsius(arr)     # ← 攝氏換算
+    dlat = abs(float(np.median(np.diff(lat)))) if lat.size > 1 else TARGET_DEG
+    step = max(1, int(round(TARGET_DEG / max(dlat, 1e-6))), int(stride) if stride else 1)
+    lat, lon, cel = lat[::step], lon[::step], cel[::step, ::step]
+    fin = cel[np.isfinite(cel)]
+    rng = f"，值域 {fin.min():.2f}~{fin.max():.2f}°C" if fin.size else ""
+    log(f"  🌡 OSTIA 原始→攝氏：{path.name}{rng}")
+    return lat, lon, cel.astype(np.float32), actual

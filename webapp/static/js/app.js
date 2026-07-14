@@ -207,9 +207,10 @@ function buildTraces() {
     };
   }
   const dhwMax = Math.max(8, state.sst.stats.max ?? 8);
+  const sstUnit = (state.sst.unit === "K") ? "K" : "°C";   // OSTIA 原始為 K
   const hoverTxt = isMuranom
       ? "<b>距平</b> %{z:.2f} °C<br>"
-      : (isDhw ? "<b>DHW</b> %{z:.2f} °C-週<br>" : "<b>SST</b> %{z:.2f} °C<br>");
+      : (isDhw ? "<b>DHW</b> %{z:.2f} °C-週<br>" : `<b>SST</b> %{z:.2f} ${sstUnit}<br>`);
   traces.push({
     type: "heatmap",
     x: state.sst.lon,
@@ -234,7 +235,7 @@ function buildTraces() {
                  : (isChl ? "Chl (mg/m³)"
                  : (isSsh ? "SLA (cm)"
                  : (isSpd ? "流速 (m/s)"
-                 : (isDhw ? "DHW (°C·週)" : "SST (°C)"))))),
+                 : (isDhw ? "DHW (°C·週)" : `SST (${sstUnit})`))))),
                font: { color: "#e2e8f0", size: 12 } },
       ...(isChl ? {
         tickvals: [-1, -0.523, 0, 0.477, 1],
@@ -426,6 +427,12 @@ function plotTitleText() {
     return `<b>${s.name_zh || ""}漁場預測 (ECDF-HSI)</b>${dateSpan}`;
   }
   if (s.anomaly) return `<b>海面水溫距平 ΔSST (°C)</b>${dateSpan}`;
+  if (s.kind === "sst") {
+    const lbl = s.unit === "K"
+      ? "海面溫度 SST (K)｜OSTIA 原始"
+      : "海面水溫 SST (°C)｜OSTIA";
+    return `<b>${lbl}</b>${dateSpan}`;
+  }
   const labels = {
     sst: "海面水溫 SST (°C)｜OSTIA",
     chl: "葉綠素-a Chl-a (mg/m³)｜GlobColour",
@@ -901,9 +908,42 @@ async function downloadEnv(dataset, label) {
   }
 }
 
+// OSTIA：下載原始（K）或換算攝氏（°C），顯示於右側地圖框
+async function ostiaAction(url, label) {
+  const dEl = $("dmDate");
+  const date = dEl && dEl.value ? dEl.value : null;
+  showLoading(`${label}${date ? " " + date : ""} …`);
+  setConnBusy(true, "處理中");
+  try {
+    const d = await api(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(date ? { date } : {}),
+    });
+    if (!d.ok) throw new Error(d.error || "失敗");
+    state.fronts = null; state.showFronts = false;
+    if ($("chkFronts")) $("chkFronts").checked = false;
+    state.chlOverlay = null; state.currents = null; state.profileLine = null;
+    state.sst = {
+      kind: "sst", unit: d.unit, lon: d.lon, lat: d.lat, values: d.values,
+      stats: d.stats, date: d.date, dataset: "mur",
+      factor: 1, shape: [d.lat.length, d.lon.length],
+    };
+    $("hdrDate").textContent = d.date;
+    updateStats();
+    await drawPlot(false);
+    setStatus(`${label} ${d.date}｜範圍 ${d.stats.min}–${d.stats.max} ${d.unit || ""}`);
+  } catch (e) {
+    alert(`${label}失敗：` + e.message);
+  } finally {
+    hideLoading(); setConnBusy(false);
+  }
+}
+
 // ── Wire up controls ────────────────────────────────────────
 function wireUp() {
-  $("btnDownload").onclick      = () => downloadEnv("mur", "SST（OSTIA）");
+  $("btnDownload").onclick      = () => ostiaAction("/api/ostia/download", "下載 SST（OSTIA）原始");
+  if ($("btnOstiaCelsius")) $("btnOstiaCelsius").onclick = () => ostiaAction("/api/ostia/celsius", "OSTIA 換算攝氏並展示");
   $("btnDetectFronts").onclick  = startFrontDetection;
   $("btnReset").onclick         = () => Plotly.relayout(plotDiv, {
     "xaxis.range": [LON_MIN, LON_MAX], "yaxis.range": [LAT_MIN, LAT_MAX],

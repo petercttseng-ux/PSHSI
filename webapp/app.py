@@ -713,6 +713,58 @@ def api_download_env():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+# ── OSTIA raw download + explicit Kelvin→°C conversion ──────────────────────
+def _ostia_payload(lat, lon, arr, date, unit):
+    values = [[None if not np.isfinite(v) else round(float(v), 3) for v in row]
+              for row in arr]
+    fin = arr[np.isfinite(arr)]
+    stats = ({"min": round(float(fin.min()), 3), "max": round(float(fin.max()), 3),
+              "mean": round(float(fin.mean()), 3)} if fin.size else
+             {"min": None, "max": None, "mean": None})
+    return {"ok": True, "kind": "sst", "unit": unit, "dataset": "mur",
+            "lon": [round(float(x), 4) for x in lon],
+            "lat": [round(float(y), 4) for y in lat],
+            "values": values, "date": date, "stats": stats}
+
+
+@app.route("/api/ostia/download", methods=["POST"])
+def api_ostia_download():
+    """下載 OSTIA 原始資料（凱氏，存檔於 mur_data/ostia_raw/）並顯示原始溫度場。"""
+    body = request.get_json(silent=True) or {}
+    date = body.get("date") or datetime.date.today().isoformat()
+    import copernicus as cop
+    try:
+        log(f"⬇ 下載 OSTIA 原始資料（凱氏）{date} …")
+        lat, lon, arr, actual = cop.fetch_region_day("mur", date, log,
+                                                     stride=8, convert=False)
+        if arr is None:
+            return jsonify({"ok": False, "error": f"{date} 無 OSTIA 資料"}), 502
+        return jsonify(_ostia_payload(lat, lon, arr, actual, "K"))
+    except Exception as e:
+        log(f"❌ OSTIA 下載失敗：{e}")
+        log(traceback.format_exc())
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/ostia/celsius", methods=["POST"])
+def api_ostia_celsius():
+    """讀取已保存的 OSTIA 原始檔，換算成攝氏並顯示於地圖框。"""
+    body = request.get_json(silent=True) or {}
+    date = body.get("date") or datetime.date.today().isoformat()
+    import copernicus as cop
+    try:
+        log(f"🌡 OSTIA 原始資料換算攝氏 {date} …")
+        lat, lon, arr, actual = cop.load_raw_celsius(date, log, stride=8)
+        if arr is None:
+            return jsonify({"ok": False,
+                            "error": "尚無 OSTIA 原始資料，請先按「下載 SST（OSTIA）」"}), 400
+        return jsonify(_ostia_payload(lat, lon, arr, actual, "°C"))
+    except Exception as e:
+        log(f"❌ OSTIA 換算失敗：{e}")
+        log(traceback.format_exc())
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 # ── Habitat / fishing-ground prediction (漁場預測 · ECDF-HSI) ───────────────
 @app.route("/api/habitat/params")
 def api_habitat_params():
