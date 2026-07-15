@@ -768,17 +768,33 @@ def _ostia_payload(lat, lon, arr, date, unit):
 
 @app.route("/api/ostia/download", methods=["POST"])
 def api_ostia_download():
-    """下載 OSTIA 原始資料（凱氏，存檔於 mur_data/ostia_raw/）並顯示原始溫度場。"""
+    """下載 OSTIA 原始資料（凱氏，存檔於 mur_data/ostia_raw/）並顯示原始溫度場。
+
+    OSTIA NRT 有約 1 天延遲，故所選日期若尚未發布，會自動往前回溯至最近可用日
+    （最多 fallback_days 天）。"""
     body = request.get_json(silent=True) or {}
     date = body.get("date") or datetime.date.today().isoformat()
     import copernicus as cop
+    fb = cop.DATASETS["mur"].get("fallback_days", 3)
     try:
-        log(f"⬇ 下載 OSTIA 原始資料（凱氏）{date} …")
-        lat, lon, arr, actual = cop.fetch_region_day("mur", date, log,
-                                                     stride=8, convert=False)
-        if arr is None:
-            return jsonify({"ok": False, "error": f"{date} 無 OSTIA 資料"}), 502
-        return jsonify(_ostia_payload(lat, lon, arr, actual, "K"))
+        d0 = datetime.date.fromisoformat(date)
+    except ValueError:
+        d0 = datetime.date.today()
+    try:
+        for i in range(fb + 1):
+            d = (d0 - datetime.timedelta(days=i)).isoformat()
+            if i == 0:
+                log(f"⬇ 下載 OSTIA 原始資料（凱氏）{d} …")
+            else:
+                log(f"  ↩ 改試前一日 {d} …")
+            lat, lon, arr, actual = cop.fetch_region_day("mur", d, log,
+                                                         stride=8, convert=False)
+            if arr is not None:
+                if i > 0:
+                    log(f"  ✓ {date} 之 NRT 尚未發布，改用最近可用日期 {actual}")
+                return jsonify(_ostia_payload(lat, lon, arr, actual, "K"))
+        return jsonify({"ok": False,
+                        "error": f"{date} 起往前 {fb} 天皆無 OSTIA 資料"}), 502
     except Exception as e:
         log(f"❌ OSTIA 下載失敗：{e}")
         log(traceback.format_exc())
