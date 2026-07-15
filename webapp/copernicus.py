@@ -24,6 +24,8 @@ Marine Environmental Research, Fisheries Research Institute, MOA.
 """
 from __future__ import annotations
 
+import configparser
+import os
 import pathlib
 import re
 import uuid
@@ -68,6 +70,142 @@ _CACHE = DATA_DIR / "copernicus"
 _CACHE.mkdir(exist_ok=True)
 RAW_DIR = DATA_DIR / "ostia_raw"     # 保留下載的原始 OSTIA 檔（凱氏）
 RAW_DIR.mkdir(exist_ok=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Copernicus Marine 登入（帳號認證）
+#
+# 官方 copernicusmarine 工具箱以 login() 將帳密寫入使用者目錄下的設定檔
+# （$HOME/.copernicusmarine/.copernicusmarine-credentials）。本模組提供
+# login_status() / do_login() / logout() 供 Web 介面呼叫。密碼僅交給官方工具箱，
+# 不由本系統儲存或寫入日誌。
+# ─────────────────────────────────────────────────────────────────────────
+CONFIG_DIR = pathlib.Path(
+    os.environ.get("COPERNICUSMARINE_CONFIG_DIRECTORY")
+    or (pathlib.Path.home() / ".copernicusmarine")
+)
+CREDENTIALS_FILE = CONFIG_DIR / ".copernicusmarine-credentials"
+ENV_USER = "COPERNICUSMARINE_SERVICE_USERNAME"
+
+
+def toolbox_info() -> dict:
+    """回報 copernicusmarine 套件是否安裝與版本。"""
+    try:
+        import copernicusmarine as cm
+        return {"installed": True, "version": getattr(cm, "__version__", "unknown")}
+    except Exception:
+        return {"installed": False, "version": None}
+
+
+def _read_config_username():
+    """從憑證檔解析使用者名稱（不讀取／不回傳密碼）。"""
+    if not CREDENTIALS_FILE.exists():
+        return None
+    try:
+        txt = CREDENTIALS_FILE.read_text(errors="ignore")
+        cp = configparser.ConfigParser()
+        cp.read_string(txt)
+        for sec in cp.sections():
+            if cp.has_option(sec, "username"):
+                u = cp.get(sec, "username").strip()
+                if u:
+                    return u
+        m = re.search(r"(?im)^\s*username\s*[:=]\s*(\S+)", txt)
+        return m.group(1).strip() if m else None
+    except Exception:
+        return None
+
+
+def login_status(check_valid: bool = False) -> dict:
+    """回報目前 Copernicus Marine 登入狀態。
+
+    check_valid=True 時另呼叫工具箱線上驗證憑證是否有效（需要網路）。
+    """
+    tb = toolbox_info()
+    file_user = _read_config_username()
+    env_user = os.environ.get(ENV_USER)
+    username = file_user or env_user
+    source = "file" if file_user else ("env" if env_user else None)
+
+    valid = None
+    if check_valid and tb["installed"] and username:
+        try:
+            import copernicusmarine as cm
+            valid = bool(cm.login(check_credentials_valid=True))
+        except TypeError:
+            valid = None            # 舊版無此參數 → 無法線上驗證
+        except Exception:
+            valid = None
+
+    return {
+        "logged_in": bool(username),
+        "username": username,
+        "source": source,
+        "valid": valid,
+        "config_file": str(CREDENTIALS_FILE),
+        "toolbox_installed": tb["installed"],
+        "toolbox_version": tb["version"],
+    }
+
+
+def do_login(username: str, password: str) -> dict:
+    """以帳密登入並將憑證存入使用者設定檔（force_overwrite 免互動確認）。
+
+    跨工具箱版本相容（v2 用 force_overwrite、v1 用 overwrite_configuration_file）。
+    成功回傳 {ok:True, username, valid}；失敗回傳 {ok:False, error}。
+    """
+    username = (username or "").strip()
+    if not username or not password:
+        return {"ok": False, "error": "請輸入帳號與密碼"}
+
+    tb = toolbox_info()
+    if not tb["installed"]:
+        return {"ok": False,
+                "error": "本機未安裝 copernicusmarine 套件，請先執行："
+                         "pip install copernicusmarine"}
+
+    import copernicusmarine as cm
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+
+    last_err = None
+    wrote = False
+    for extra in ({"force_overwrite": True},
+                  {"overwrite_configuration_file": True},
+                  {"overwrite": True},
+                  {}):
+        try:
+            res = cm.login(username=username, password=password, **extra)
+            wrote = True
+            if res is False:               # v2 帳密錯誤 → 明確回 False
+                return {"ok": False, "error": "帳號或密碼錯誤，請重新輸入"}
+            break                          # True 或 None（v1）視為已寫入
+        except TypeError as e:
+            last_err = e                   # 該版本不支援此參數 → 換下一組
+            continue
+        except Exception as e:
+            return {"ok": False, "error": f"登入失敗：{e}"}
+
+    if not wrote:
+        return {"ok": False, "error": f"登入失敗：{last_err}" if last_err else "登入失敗"}
+
+    st = login_status(check_valid=True)    # 寫入後線上驗證一次（若支援）
+    if st["valid"] is False:
+        return {"ok": False, "error": "憑證驗證失敗，帳號或密碼可能錯誤"}
+    if not st["logged_in"]:
+        return {"ok": False, "error": "登入未成功（未產生憑證檔）"}
+    return {"ok": True, "username": st["username"], "valid": st["valid"],
+            "message": "登入成功，憑證已儲存於本機"}
+
+
+def logout() -> dict:
+    """移除本機儲存的 Copernicus Marine 憑證檔。"""
+    try:
+        if CREDENTIALS_FILE.exists():
+            CREDENTIALS_FILE.unlink()
+            return {"ok": True, "message": "已登出，本機憑證已移除"}
+        return {"ok": True, "message": "本機原本即無憑證檔"}
+    except Exception as e:
+        return {"ok": False, "error": f"登出失敗：{e}"}
 
 
 def kelvin_to_celsius(arr):

@@ -30,6 +30,7 @@ from werkzeug.utils import secure_filename
 import sst_processor as sp
 import timeseries as ts
 import habitat as hb
+import copernicus as cop
 
 APP_ROOT = pathlib.Path(__file__).resolve().parent
 app = Flask(
@@ -127,6 +128,44 @@ def index():
 @app.route("/api/token_status")
 def api_token_status():
     return jsonify(sp.check_credentials())
+
+
+# ── Copernicus Marine 登入 ─────────────────────────────────────────────────
+@app.route("/api/copernicus/status")
+def api_copernicus_status():
+    """回報 Copernicus Marine 登入狀態。?check=1 時另做線上憑證驗證。"""
+    check = request.args.get("check", "").lower() in ("1", "true", "yes")
+    try:
+        return jsonify(cop.login_status(check_valid=check))
+    except Exception as e:
+        return jsonify({"logged_in": False, "error": str(e)}), 500
+
+
+@app.route("/api/copernicus/login", methods=["POST"])
+def api_copernicus_login():
+    """以帳密登入 Copernicus Marine，憑證由官方工具箱存於本機使用者目錄。"""
+    body = request.get_json(silent=True) or {}
+    username = (body.get("username") or "").strip()
+    password = body.get("password") or ""
+    if not username or not password:
+        return jsonify({"ok": False, "error": "請輸入 Copernicus Marine 帳號與密碼"}), 400
+    log(f"🔐 嘗試登入 Copernicus Marine（帳號 {username}）…")   # 不記錄密碼
+    res = cop.do_login(username, password)
+    if res.get("ok"):
+        vtxt = "，憑證已線上驗證" if res.get("valid") is True else ""
+        log(f"🔑 Copernicus Marine 登入成功：{res.get('username', username)}{vtxt}")
+        return jsonify(res)
+    log(f"⚠️ Copernicus Marine 登入失敗：{res.get('error')}")
+    return jsonify(res), 401
+
+
+@app.route("/api/copernicus/logout", methods=["POST"])
+def api_copernicus_logout():
+    """移除本機儲存的 Copernicus Marine 憑證。"""
+    res = cop.logout()
+    if res.get("ok"):
+        log("🚪 已登出 Copernicus Marine（本機憑證已移除）")
+    return jsonify(res)
 
 
 @app.route("/api/status")

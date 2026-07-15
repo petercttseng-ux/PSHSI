@@ -50,6 +50,37 @@
     <section class="card">
       <h2 class="card-title">📡 資料管理</h2>
       <div class="card-body">
+
+        <!-- Copernicus Marine 登入 -->
+        <div class="cop-auth" id="copAuth">
+          <div class="cop-status" id="copStatus" title="Copernicus Marine 帳號登入狀態">
+            <span class="cop-dot" id="copDot"></span>
+            <span class="cop-status-text" id="copStatusText">檢查登入狀態…</span>
+          </div>
+          <details class="cop-login" id="copLoginBox">
+            <summary>🔐 Copernicus Marine 登入 / 設定</summary>
+            <div class="cop-fields">
+              <label for="copUser">帳號（Username / Email）</label>
+              <input type="text" id="copUser" autocomplete="username"
+                     placeholder="Copernicus Marine 帳號" />
+              <label for="copPass">密碼（Password）</label>
+              <input type="password" id="copPass" autocomplete="current-password"
+                     placeholder="密碼" />
+              <div class="cop-btn-row">
+                <button class="btn btn-primary btn-sm" id="btnCopLogin">
+                  <span class="btn-icon">🔐</span><span>登入</span>
+                </button>
+                <button class="btn btn-secondary btn-sm" id="btnCopLogout">
+                  <span class="btn-icon">🚪</span><span>登出</span>
+                </button>
+              </div>
+              <p class="hint">憑證由官方 copernicusmarine 工具箱儲存於本機使用者目錄，
+                本系統不另存密碼。尚無帳號請至
+                <b>marine.copernicus.eu</b> 免費註冊。</p>
+            </div>
+          </details>
+        </div>
+
         <div class="control-row">
           <label for="dmDate">資料日期</label>
           <input type="date" id="dmDate" />

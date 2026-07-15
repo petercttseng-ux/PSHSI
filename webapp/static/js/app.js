@@ -488,57 +488,67 @@ function plotLayout(preserveAxes = false) {
     showlegend: false,
     dragmode: "zoom",
     annotations: state.sst ? [{
-      text: "�  // Hover handler for the floating cursor info
-  plotDiv.on("plotly_hover", ev => {
-    const p = ev.points && ev.points[0];
-    if (!p || p.data.type !== "heatmap") return;
-    cursorInfo.classList.add("visible");
-    const info   = layerInfo();
-    ciLon.textContent   = lonLabel(p.x);
-    ciLat.textContent   = p.y.toFixed(3) + "°N";
-    ciLabel.textContent = info.label;
-    if (p.z == null) {
-      ciSst.textContent = "陸地/遮罩";
-      setStatus(`經度 ${lonLabel(p.x)} │ 緯度 ${p.y.toFixed(3)}°N │ —`);
-    } else {
-      ciSst.textContent = info.fmt(p.z);
-      setStatus(
-        `經度 ${lonLabel(p.x)} │ 緯度 ${p.y.toFixed(3)}°N │ ` +
-        `${info.statusLabel} ${info.fmt(p.z)}`
-      );
-    }
-  });
-  if (!plotDiv.__stationClickWired) {
-    plotDiv.__stationClickWired = true;
-    plotDiv.on("plotly_click", (ev) => {
-      const pt = ev.points && ev.points[0];
-      if (!pt || typeof pt.x !== "number") return;
-      if (state.profileMode) { handleProfileClick(pt.x, pt.y); return; }
-      const chk = document.getElementById("chkAddStation");
-      if (!chk || !chk.checked) return;
-      $("stLat").value = pt.y.toFixed(3);
-      $("stLon").value = pt.x.toFixed(3);
-      setStatus(`已選點位 ${pt.x.toFixed(3)}°E, ${pt.y.toFixed(3)}°N — 填寫站名後按「新增測站」`);
-    });
+      text: "資料來源 NASA JPL · MUR v4.1 · 農業部水產試驗所 漁海況研究小組",
+      x: 0, y: -0.07, xref: "paper", yref: "paper",
+      showarrow: false, xanchor: "left",
+      font: { size: 9, color: "#475569", family: "Inter" },
+    }] : [],
+  };
+
+  if (!preserveAxes && state.sst) {
+    layout.xaxis.range = [LON_MIN, LON_MAX];
+    layout.yaxis.range = [LAT_MIN, LAT_MAX];
+  }
+  return layout;
+}
+
+const plotConfig = {
+  responsive: true,
+  displaylogo: false,
+  scrollZoom: true,
+  toImageButtonOptions: {
+    format: "png",
+    filename: "GHRSST_MUR_SST",
+    height: 1100,
+    width: 1400,
+    scale: 2,
+  },
+  modeBarButtonsToRemove: ["lasso2d", "select2d"],
+};
+
+async function drawPlot(preserveAxes = false) {
+  if (!state.sst) {
+    Plotly.purge(plotDiv);
+    emptyState.classList.remove("hidden");
+    return;
+  }
+  emptyState.classList.add("hidden");
+
+  // 圖層／單位切換（如 OSTIA 由 K 換算成 °C）時強制重繪，
+  // 否則 Plotly.react 會沿用舊的色標圖例（zmin/zmax 不更新）。
+  const rkey = `${state.sst.kind}|${state.sst.unit || ""}|${!!state.sst.anomaly}`;
+  if (drawPlot._lastKey !== undefined && drawPlot._lastKey !== rkey) {
+    Plotly.purge(plotDiv);
+    plotDiv.__stationClickWired = false;
+  }
+  drawPlot._lastKey = rkey;
+
+  // Get current axis ranges if preserving
+  let preservedX = null, preservedY = null;
+  if (preserveAxes && plotDiv.layout) {
+    preservedX = plotDiv.layout.xaxis.range;
+    preservedY = plotDiv.layout.yaxis.range;
   }
 
-  plotDiv.on("plotly_unhover", () => {
-    cursorInfo.classList.remove("visible");
-    if (state.sst) {
-      const info = layerInfo();
-      const st   = state.sst.stats;
-      const u    = info.statsUnit || "";
-      const minV = st.min  != null ? st.min.toFixed(2)  + (u ? " " + u : "") : "—";
-      const maxV = st.max  != null ? st.max.toFixed(2)  + (u ? " " + u : "") : "—";
-      setStatus(`資料日期：${state.sst.date}　│　${info.label} 範圍：${minV} – ${maxV}`);
-    }
-  });
-}
-t.xaxis.range = preservedX;
+  const traces = buildTraces();
+  const layout = plotLayout(preserveAxes);
+  if (preservedX && preservedY) {
+    layout.xaxis.range = preservedX;
     layout.yaxis.range = preservedY;
   }
 
   await Plotly.react(plotDiv, traces, layout, plotConfig);
+
 
   // Hover handler for the floating cursor info
   plotDiv.on("plotly_hover", ev => {
@@ -1022,6 +1032,75 @@ function wireUp() {
 
   if ($("btnDownloadModis")) $("btnDownloadModis").onclick = () => downloadEnv("chl", "Chl-a（GlobColour）");
   if ($("btnDownloadSsha")) $("btnDownloadSsha").onclick = () => downloadEnv("ssh", "SSHA（SLA）");
+
+  // Copernicus Marine 登入
+  if ($("btnCopLogin")) $("btnCopLogin").onclick = copernicusLogin;
+  if ($("btnCopLogout")) $("btnCopLogout").onclick = copernicusLogout;
+  if ($("copPass")) $("copPass").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); copernicusLogin(); }
+  });
+}
+
+// ── Copernicus Marine login ─────────────────────────────────
+async function refreshCopernicusStatus(check = false) {
+  const dot = $("copDot"), txt = $("copStatusText"), box = $("copLoginBox");
+  const logoutBtn = $("btnCopLogout");
+  if (!dot || !txt) return;
+  try {
+    const st = await api(`/api/copernicus/status${check ? "?check=1" : ""}`);
+    if (st.logged_in) {
+      dot.className = "cop-dot ok";
+      let s = `已登入：${st.username || "(帳號)"}`;
+      if (st.source === "env") s += "（環境變數）";
+      if (st.valid === true) s += " ✓憑證有效";
+      else if (st.valid === false) s += " ⚠憑證失效，請重新登入";
+      txt.textContent = s;
+      if (logoutBtn) logoutBtn.style.display = "";
+      if (box) box.open = (st.valid === false);
+    } else {
+      dot.className = "cop-dot off";
+      txt.textContent = (st.toolbox_installed === false)
+        ? "未安裝 copernicusmarine 套件（pip install copernicusmarine）"
+        : "尚未登入 Copernicus Marine";
+      if (logoutBtn) logoutBtn.style.display = "none";
+      if (box) box.open = true;
+    }
+  } catch (e) {
+    dot.className = "cop-dot off";
+    txt.textContent = "無法取得登入狀態";
+  }
+}
+
+async function copernicusLogin() {
+  const u = ($("copUser").value || "").trim();
+  const p = $("copPass").value || "";
+  if (!u || !p) { alert("請輸入 Copernicus Marine 帳號與密碼"); return; }
+  const btn = $("btnCopLogin");
+  btn.disabled = true;
+  setConnBusy(true, "登入 Copernicus…");
+  try {
+    const res = await api("/api/copernicus/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: u, password: p }),
+    });
+    $("copPass").value = "";                 // 不在前端保留密碼
+    await refreshCopernicusStatus(true);
+    setConnBusy(false, "已登入 Copernicus");
+    if (res && res.message) alert(res.message);
+  } catch (e) {
+    setConnBusy(false);
+    await refreshCopernicusStatus();
+    alert("登入失敗：" + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function copernicusLogout() {
+  if (!confirm("確定要登出並移除本機儲存的 Copernicus Marine 憑證？")) return;
+  try { await api("/api/copernicus/logout", { method: "POST" }); } catch (_) { /* ignore */ }
+  await refreshCopernicusStatus();
 }
 
 // ── Init ────────────────────────────────────────────────────
@@ -1037,6 +1116,7 @@ async function init() {
   await fetchCoastline();
   await fetchStatus();
   await loadFileList();
+  refreshCopernicusStatus(true);   // Copernicus 登入狀態（含線上驗證）
 }
 
 init();
