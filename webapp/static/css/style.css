@@ -692,3 +692,177 @@ input[type="date"], input[type="text"] {
 .hsi-ranges { margin-top: 8px; font-size: 11px; line-height: 1.5; }
 .hsi-ranges b { color: #e2e8f0; }
 .hsi-ranges .hsi-sp { display: block; margin-top: 4px; }
+
+/* ── ECDF btn-row ────────────────────────────────────────────── */
+.ecdf-btn-row {
+  display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px;
+}
+.ecdf-btn-row .btn-outline {
+  flex: 1; min-width: 120px; font-size: 11px; padding: 5px 8px;
+}
+
+/* btn-outline variant */
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: var(--radius-sm);
+  transition: background 0.18s, color 0.18s;
+  display: inline-flex; align-items: center; gap: 5px;
+  cursor: pointer;
+}
+.btn-outline:hover {
+  background: var(--accent);
+  color: #071520;
+}
+
+/* ── ECDF Analysis Modal ─────────────────────────────────────── */
+.ecdf-modal-card {
+  width: min(1260px, 96vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 0;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+}
+
+.ecdf-modal-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 16px 20px 0;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ecdf-species-tabs {
+  display: flex; gap: 4px; align-items: flex-end;
+}
+
+.ecdf-tab {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  color: var(--text-dim);
+  padding: 8px 18px;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+  position: relative;
+  bottom: -1px;
+  font-family: inherit;
+}
+.ecdf-tab em { font-style: italic; font-size: 11px; opacity: 0.75; margin-left: 5px; }
+.ecdf-tab:hover {
+  background: var(--bg-card-hi); color: var(--text);
+}
+.ecdf-tab.active {
+  background: var(--bg-card); color: var(--accent);
+  border-color: var(--border-hi); border-bottom-color: var(--bg-card);
+  font-weight: 600;
+}
+
+.ecdf-modal-meta {
+  padding: 10px 20px 6px;
+  font-size: 12px; color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  min-height: 32px;
+}
+.ecdf-modal-meta b { color: var(--text); }
+.ecdf-modal-meta .meta-badge {
+  display: inline-block;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  margin-left: 10px;
+  font-size: 11px;
+}
+
+.ecdf-charts-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  padding: 14px 16px 6px;
+  flex: 1;
+}
+
+.ecdf-chart-wrap {
+  display: flex;
+  flex-direction: column;
+  padding: 0 6px;
+  border-right: 1px solid var(--border);
+}
+.ecdf-chart-wrap:last-child { border-right: none; }
+
+.ecdf-chart-title {
+  font-size: 12px; font-weight: 600;
+  color: var(--accent-hi);
+  margin-bottom: 6px;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+.ecdf-chart {
+  height: 310px;
+  min-width: 0;
+}
+
+/* Range summary table */
+.ecdf-range-table {
+  padding: 10px 20px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.ecdf-range-table table {
+  width: 100%; border-collapse: collapse;
+}
+.ecdf-range-table th {
+  color: var(--accent); font-weight: 600;
+  padding: 5px 10px; text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
+}
+.ecdf-range-table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid rgba(31,61,101,0.4);
+  vertical-align: middle;
+}
+.ecdf-range-table td:first-child { color: var(--text); font-weight: 500; }
+.ecdf-range-table .opt-cell {
+  color: #fb923c;
+  font-weight: 600;
+}
+.ecdf-range-table .suit-cell {
+  color: #38bdf8;
+}
+.ecdf-range-table .med-cell {
+  color: #22c55e;
+  font-weight: 600;
+}
+
+/* Suitability legend within table */
+.ecdf-si-legend {
+  display: flex; gap: 14px; flex-wrap: wrap;
+  margin-top: 8px; font-size: 11px;
+}
+.ecdf-si-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.ecdf-si-badge span {
+  display: inline-block; width: 28px; height: 8px; border-radius: 3px;
+}
+
+@media (max-width: 900px) {
+  .ecdf-charts-row { grid-template-columns: 1fr; }
+  .ecdf-chart-wrap { border-right: none; border-bottom: 1px solid var(--border); }
+  .ecdf-chart-wrap:last-child { border-bottom: none; }
+  .ecdf-chart { height: 240px; }
+}
+

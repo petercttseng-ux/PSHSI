@@ -85,16 +85,27 @@
     <section class="card hsi-card">
       <h2 class="card-title">🎯 漁場預測 (ECDF-HSI)</h2>
       <div class="card-body">
-        <p class="hint">依 1998–2007 漁獲 CPUE 之經驗累積分布函數(ECDF)推得 SST／Chl-a／SSHA 最適範圍，計算所選日期各海域之棲地適合度機率。</p>
-        <div class="control-row">
+        <p class="hint">依 1998–2007 漁獲 CPUE 之<b>加權經驗累積分布函數(ECDF)</b>推得 SST／Chl-a／SSHA 最適範圍，計算所選日期各海域之棲地適合度機率（HSI）。</p>
+
+        <!-- ECDF Analysis -->
+        <div class="ecdf-btn-row">
+          <button class="btn btn-outline btn-sm" id="btnEcdfSkj" title="查看正鰹 ECDF 曲線">
+            <span class="btn-icon">📊</span><span>正鰹 ECDF 分析圖</span>
+          </button>
+          <button class="btn btn-outline btn-sm" id="btnEcdfYft" title="查看黃鰭鮪 ECDF 曲線">
+            <span class="btn-icon">📊</span><span>黃鰭鮪 ECDF 分析圖</span>
+          </button>
+        </div>
+
+        <div class="control-row" style="margin-top:0.6rem">
           <label for="hsiDate">預測日期</label>
           <input type="date" id="hsiDate" />
         </div>
         <button class="btn btn-primary" id="btnPredictSkj">
-          <span class="btn-icon">🐟</span><span>正鰹漁場預測（一鍵）</span>
+          <span class="btn-icon">🎯</span><span>正鰹（Skipjack）漁場預測</span>
         </button>
         <button class="btn btn-primary" id="btnPredictYft">
-          <span class="btn-icon">🐟</span><span>黃鰭鮪漁場預測（一鍵）</span>
+          <span class="btn-icon">🎯</span><span>黃鰭鮪（Yellowfin）漁場預測</span>
         </button>
         <div class="progress-wrapper hidden" id="hsiProgressWrapper">
           <div class="progress-bar"><div class="progress-fill" id="hsiProgressFill"></div></div>
@@ -302,7 +313,7 @@
     <div class="cursor-info" id="cursorInfo">
       <div class="ci-row"><span class="ci-label">經度</span><span class="ci-val" id="ciLon">—</span></div>
       <div class="ci-row"><span class="ci-label">緯度</span><span class="ci-val" id="ciLat">—</span></div>
-      <div class="ci-row big"><span class="ci-label">水溫</span><span class="ci-val" id="ciSst">—</span></div>
+      <div class="ci-row big"><span class="ci-label" id="ciLabel">水溫</span><span class="ci-val" id="ciSst">—</span></div>
     </div>
 
     <!-- Legend hint -->
@@ -348,6 +359,39 @@
     </div>
   </div>
 </main>
+
+<!-- ╔══ ECDF Analysis Modal ══════════════════════════════════════ ╗ -->
+<div class="loading-overlay hidden" id="ecdfModal" style="z-index:70;align-items:flex-start;padding-top:3vh">
+  <div class="card ecdf-modal-card">
+    <div class="ecdf-modal-header">
+      <div class="ecdf-species-tabs">
+        <button class="ecdf-tab active" id="ecdfTabSkj" data-sp="skipjack">
+          🐟 正鰹 <em>Skipjack tuna</em>
+        </button>
+        <button class="ecdf-tab" id="ecdfTabYft" data-sp="yellowfin">
+          🐡 黃鰭鮪 <em>Yellowfin tuna</em>
+        </button>
+      </div>
+      <button class="btn btn-secondary btn-sm" id="btnCloseEcdf" style="align-self:center">✕ 關閉</button>
+    </div>
+    <div class="ecdf-modal-meta" id="ecdfMeta"></div>
+    <div class="ecdf-charts-row">
+      <div class="ecdf-chart-wrap">
+        <div class="ecdf-chart-title">🌡 SST（海面水溫，°C）</div>
+        <div id="ecdfChartSst" class="ecdf-chart"></div>
+      </div>
+      <div class="ecdf-chart-wrap">
+        <div class="ecdf-chart-title">🟢 Chl-a（葉綠素，mg/m³）</div>
+        <div id="ecdfChartChl" class="ecdf-chart"></div>
+      </div>
+      <div class="ecdf-chart-wrap">
+        <div class="ecdf-chart-title">🌊 SSHA（海面高度距平，cm）</div>
+        <div id="ecdfChartSsha" class="ecdf-chart"></div>
+      </div>
+    </div>
+    <div class="ecdf-range-table" id="ecdfRangeTable"></div>
+  </div>
+</div>
 
 <!-- ╔══ FOOTER ══════════════════════════════════════════════════ ╗ -->
 <footer class="app-footer">

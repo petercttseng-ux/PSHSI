@@ -59,7 +59,8 @@ DATASETS = {
     },
     "ssh": {
         "id": "noaacwBLENDEDsshDaily", "var": "sla", "kind": "ssh",
-        "name": "SSHA 海面高度距平（MEaSUREs，Earthdata）", "default_stride": 1,
+        "name": "SSHA 海面高度距平（DUACS，Copernicus Marine）", "default_stride": 1,
+        "fallback_days": 14,   # DUACS NRT 延遲通常 5-7 天，放寬至 14 天
         "hosts": ["https://coastwatch.noaa.gov/erddap/griddap"],
     },
     "currents": {

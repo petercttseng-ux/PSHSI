@@ -766,6 +766,37 @@ def api_ostia_celsius():
 
 
 # ── Habitat / fishing-ground prediction (漁場預測 · ECDF-HSI) ───────────────
+@app.route("/api/habitat/ecdf")
+def api_habitat_ecdf():
+    """Full ECDF quantile arrays for all species × variables, for charting."""
+    p = hb.load_params()
+    out = {}
+    for sp_key, sp_data in p["species"].items():
+        out[sp_key] = {
+            "name_zh": sp_data["name_zh"],
+            "name_en": sp_data["name_en"],
+            "n": sp_data["n"],
+            "vars": {},
+        }
+        for vname in hb.ENV_VARS:
+            vd = sp_data["vars"][vname]
+            # percentiles 0…100 → cumulative probability axis
+            out[sp_key]["vars"][vname] = {
+                "quantiles": vd["quantiles"],  # value at each percentile
+                "pctls": list(range(101)),      # 0,1,…,100
+                "optimal": vd["optimal"],
+                "suitable": vd["suitable"],
+                "median": vd["median"],
+                "p05": round(float(vd["quantiles"][5]), 5),
+                "p10": round(float(vd["quantiles"][10]), 5),
+                "p25": round(float(vd["quantiles"][25]), 5),
+                "p75": round(float(vd["quantiles"][75]), 5),
+                "p90": round(float(vd["quantiles"][90]), 5),
+                "p95": round(float(vd["quantiles"][95]), 5),
+            }
+    return jsonify({"method": p.get("method"), "region": p.get("region"), "species": out})
+
+
 @app.route("/api/habitat/params")
 def api_habitat_params():
     """ECDF-derived optimal environmental ranges + probability-level legend."""
