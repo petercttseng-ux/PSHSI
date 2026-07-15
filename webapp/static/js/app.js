@@ -555,22 +555,16 @@ async function drawPlot(preserveAxes = false) {
     const p = ev.points && ev.points[0];
     if (!p || p.data.type !== "heatmap") return;
     cursorInfo.classList.add("visible");
-    const isHsi = state.sst && state.sst.kind === "hsi";
+    const info = layerInfo();          // 依目前圖層決定標籤／單位／數值換算
+    const noData = (state.sst && state.sst.kind === "hsi") ? "無資料" : "陸地/遮罩";
+    if (ciLabel) ciLabel.textContent = info.label;   // 標籤配合目前圖層
     ciLon.textContent = lonLabel(p.x);
     ciLat.textContent = p.y.toFixed(3) + "°N";
-    if (isHsi) {
-      ciSst.textContent = (p.z == null) ? "無資料" : "HSI " + p.z.toFixed(2);
-      setStatus(
-        `經度 ${lonLabel(p.x)} │ 緯度 ${p.y.toFixed(3)}°N │ ` +
-        `棲地機率 HSI ${p.z == null ? "—" : p.z.toFixed(2)}`
-      );
-    } else {
-      ciSst.textContent = (p.z == null) ? "陸地/遮罩" : p.z.toFixed(2) + " °C";
-      setStatus(
-        `經度 ${lonLabel(p.x)} │ 緯度 ${p.y.toFixed(3)}°N │ ` +
-        `水溫 ${p.z == null ? "—" : p.z.toFixed(2) + " °C"}`
-      );
-    }
+    ciSst.textContent = (p.z == null) ? noData : info.fmt(p.z);
+    setStatus(
+      `經度 ${lonLabel(p.x)} │ 緯度 ${p.y.toFixed(3)}°N │ ` +
+      `${info.statusLabel} ${p.z == null ? "—" : info.fmt(p.z)}`
+    );
   });
   if (!plotDiv.__stationClickWired) {
     plotDiv.__stationClickWired = true;
@@ -589,7 +583,12 @@ async function drawPlot(preserveAxes = false) {
   plotDiv.on("plotly_unhover", () => {
     cursorInfo.classList.remove("visible");
     if (state.sst) {
-      setStatus(`資料日期：${state.sst.date}　│　T 範圍：${state.sst.stats.min}–${state.sst.stats.max} °C`);
+      const info = layerInfo();
+      const u    = info.statsUnit ? " " + info.statsUnit : "";
+      const st   = state.sst.stats;
+      const minV = (st.min == null) ? "—" : st.min.toFixed(2) + u;
+      const maxV = (st.max == null) ? "—" : st.max.toFixed(2) + u;
+      setStatus(`資料日期：${state.sst.date}　│　${info.label} 範圍：${minV} – ${maxV}`);
     }
   });
 }
