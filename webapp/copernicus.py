@@ -98,37 +98,53 @@ def toolbox_info() -> dict:
 
 
 def _read_config_username():
-    """從憑證檔解析使用者名稱（不讀取／不回傳密碼）。"""
+    """從憑證檔解析使用者名稱（僅供顯示；不讀取／不回傳密碼）。
+
+    密碼可能含 % 等字元會讓 configparser 內插失敗，故關閉內插，並在解析
+    失敗時獨立退回正規表示式，避免因解析失敗而誤判為未登入。
+    """
     if not CREDENTIALS_FILE.exists():
         return None
     try:
         txt = CREDENTIALS_FILE.read_text(errors="ignore")
-        cp = configparser.ConfigParser()
+    except Exception:
+        return None
+    # 1) configparser（interpolation=None：密碼含 % 也不會出錯）
+    try:
+        cp = configparser.ConfigParser(interpolation=None)
         cp.read_string(txt)
         for sec in cp.sections():
             if cp.has_option(sec, "username"):
                 u = cp.get(sec, "username").strip()
                 if u:
                     return u
-        m = re.search(r"(?im)^\s*username\s*[:=]\s*(\S+)", txt)
-        return m.group(1).strip() if m else None
     except Exception:
-        return None
+        pass
+    # 2) 正規表示式後援（獨立於上方 try）
+    try:
+        m = re.search(r"(?im)^\s*username\s*[:=]\s*(\S+)", txt)
+        if m:
+            return m.group(1).strip()
+    except Exception:
+        pass
+    return None
 
 
 def login_status(check_valid: bool = False) -> dict:
     """回報目前 Copernicus Marine 登入狀態。
 
+    是否登入以「憑證檔存在 / 環境變數 / 線上驗證通過」綜合判定，不再僅依賴
+    能否從檔案解析出帳號（避免密碼含特殊字元導致解析失敗而誤判）。
     check_valid=True 時另呼叫工具箱線上驗證憑證是否有效（需要網路）。
     """
     tb = toolbox_info()
+    file_exists = CREDENTIALS_FILE.exists()
     file_user = _read_config_username()
     env_user = os.environ.get(ENV_USER)
     username = file_user or env_user
-    source = "file" if file_user else ("env" if env_user else None)
 
     valid = None
-    if check_valid and tb["installed"] and username:
+    if check_valid and tb["installed"] and (file_exists or env_user):
         try:
             import copernicusmarine as cm
             valid = bool(cm.login(check_credentials_valid=True))
@@ -137,9 +153,11 @@ def login_status(check_valid: bool = False) -> dict:
         except Exception:
             valid = None
 
+    logged_in = bool(username) or file_exists or (valid is True)
+    source = "file" if (file_user or file_exists) else ("env" if env_user else None)
     return {
-        "logged_in": bool(username),
-        "username": username,
+        "logged_in": logged_in,
+        "username": username or ("(已儲存)" if file_exists else None),
         "source": source,
         "valid": valid,
         "config_file": str(CREDENTIALS_FILE),
@@ -151,8 +169,8 @@ def login_status(check_valid: bool = False) -> dict:
 def do_login(username: str, password: str) -> dict:
     """以帳密登入並將憑證存入使用者設定檔（force_overwrite 免互動確認）。
 
-    跨工具箱版本相容（v2 用 force_overwrite、v1 用 overwrite_configuration_file）。
-    成功回傳 {ok:True, username, valid}；失敗回傳 {ok:False, error}。
+    成功與否以「工具箱 login() 回傳值」為主要依據（v2：True 成功／False 帳密錯誤；
+    v1：None 成功），再輔以憑證檔是否產生與線上驗證，避免因無法解析帳號而誤判失敗。
     """
     username = (username or "").strip()
     if not username or not password:
@@ -168,33 +186,44 @@ def do_login(username: str, password: str) -> dict:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
     last_err = None
-    wrote = False
+    res = "unset"
     for extra in ({"force_overwrite": True},
                   {"overwrite_configuration_file": True},
                   {"overwrite": True},
                   {}):
         try:
             res = cm.login(username=username, password=password, **extra)
-            wrote = True
-            if res is False:               # v2 帳密錯誤 → 明確回 False
-                return {"ok": False, "error": "帳號或密碼錯誤，請重新輸入"}
-            break                          # True 或 None（v1）視為已寫入
+            break
         except TypeError as e:
             last_err = e                   # 該版本不支援此參數 → 換下一組
             continue
         except Exception as e:
             return {"ok": False, "error": f"登入失敗：{e}"}
 
-    if not wrote:
+    if res == "unset":
         return {"ok": False, "error": f"登入失敗：{last_err}" if last_err else "登入失敗"}
+    if res is False:                       # v2 明確回報帳密錯誤
+        return {"ok": False, "error": "帳號或密碼錯誤，請重新輸入"}
 
-    st = login_status(check_valid=True)    # 寫入後線上驗證一次（若支援）
-    if st["valid"] is False:
+    # 以工具箱回傳為主，輔以憑證檔存在與線上驗證
+    file_ok = CREDENTIALS_FILE.exists()
+    valid = None
+    try:
+        valid = bool(cm.login(check_credentials_valid=True))
+    except Exception:
+        valid = None
+    if valid is False:      # 工具箱線上驗證明確判定憑證無效
         return {"ok": False, "error": "憑證驗證失敗，帳號或密碼可能錯誤"}
-    if not st["logged_in"]:
-        return {"ok": False, "error": "登入未成功（未產生憑證檔）"}
-    return {"ok": True, "username": st["username"], "valid": st["valid"],
-            "message": "登入成功，憑證已儲存於本機"}
+
+    if res is True or res is None or file_ok or valid is True:
+        return {"ok": True,
+                "username": _read_config_username() or username,
+                "valid": valid,
+                "config_file": str(CREDENTIALS_FILE),
+                "message": "登入成功，憑證已儲存於本機"}
+
+    return {"ok": False,
+            "error": f"登入未確認：工具箱未回報成功且找不到憑證檔（{CREDENTIALS_FILE}）"}
 
 
 def logout() -> dict:
