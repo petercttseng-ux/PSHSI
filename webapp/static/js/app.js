@@ -1381,6 +1381,7 @@ async function addStationFromForm() {
 
 // ── Wiring for new features ─────────────────────────────────
 function wireSeriesAndStations() {
+  if (!$("tsDataset")) return;   // 時間序列動畫選項已移除
   // sensible default date range: last 14 days (MUR has ~1-2 day latency)
   const today = new Date();
   const end = new Date(today); end.setDate(end.getDate() - 2);
@@ -1409,6 +1410,7 @@ async function loadDatasetList() {
     const d = await api("/api/datasets");
     state.datasets = d.datasets || [];
     const sel = $("tsDataset");
+    if (!sel) return;              // 時間序列動畫選項已移除
     sel.innerHTML = state.datasets.map(x =>
       `<option value="${x.key}">${x.name}</option>`).join("");
   } catch (_) { /* ignore */ }
