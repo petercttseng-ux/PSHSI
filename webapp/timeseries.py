@@ -817,7 +817,7 @@ def fetch_day_fallback(date: str, stride: int, log: Callable[[str], None],
     return None, None
 
 
-CHL_MIN = 0.5   # 只顯示 ≥ 0.5 mg/m³ 的水色點（GlobColour L4；高生產力/潛在漁場）
+CHL_MIN = 0.1   # 只顯示 ≥ 0.1 mg/m³ 的水色點（GlobColour L4；高生產力/潛在漁場）
 
 
 def chl_payload(lat, lon, arr, max_points: int = 4000,
