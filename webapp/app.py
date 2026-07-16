@@ -260,7 +260,8 @@ def api_fronts():
     # POST → start detection
     with state.lock:
         if state.field is None:
-            return jsonify({"ok": False, "error": "尚未載入資料"}), 400
+            return jsonify({"ok": False,
+                            "error": "尚未載入 SST 資料，請先於「資料管理」下載並展示 SST（OSTIA）後再執行偵測"}), 400
         if state.fronts_status.get("active"):
             return jsonify({"ok": False, "error": "偵測進行中"}), 409
         state.fronts_status = {"active": True, "completed": False, "error": None}
@@ -766,6 +767,26 @@ def _ostia_payload(lat, lon, arr, date, unit):
             "values": values, "date": date, "stats": stats}
 
 
+def _set_field_from_grid(lat, lon, arr, date):
+    """以目前顯示之 SST 網格建立 state.field，供海洋前緣（Cayula-Cornillon）偵測使用。
+    arr 為攝氏溫度場（NaN=陸地/遮罩）。"""
+    a = np.ma.masked_invalid(np.asarray(arr, dtype=float))
+    fin = a.compressed()
+    fld = sp.SSTField(
+        lon=np.asarray(lon, dtype=float),
+        lat=np.asarray(lat, dtype=float),
+        sst=a, date=date, filename=f"OSTIA_{date}",
+        shape=tuple(a.shape),
+        sst_min=float(fin.min()) if fin.size else 0.0,
+        sst_max=float(fin.max()) if fin.size else 0.0,
+        sst_mean=float(fin.mean()) if fin.size else 0.0,
+    )
+    with state.lock:
+        state.field = fld
+        state.fronts = None
+    return fld
+
+
 @app.route("/api/ostia/download", methods=["POST"])
 def api_ostia_download():
     """下載 OSTIA 原始資料（凱氏，存檔於 mur_data/ostia_raw/）並顯示原始溫度場。
@@ -792,6 +813,7 @@ def api_ostia_download():
             if arr is not None:
                 if i > 0:
                     log(f"  ✓ {date} 之 NRT 尚未發布，改用最近可用日期 {actual}")
+                _set_field_from_grid(lat, lon, cop.kelvin_to_celsius(arr), actual)
                 return jsonify(_ostia_payload(lat, lon, arr, actual, "K"))
         return jsonify({"ok": False,
                         "error": f"{date} 起往前 {fb} 天皆無 OSTIA 資料"}), 502
@@ -813,6 +835,7 @@ def api_ostia_celsius():
         if arr is None:
             return jsonify({"ok": False,
                             "error": "尚無 OSTIA 原始資料，請先按「下載 SST（OSTIA）」"}), 400
+        _set_field_from_grid(lat, lon, arr, actual)
         return jsonify(_ostia_payload(lat, lon, arr, actual, "°C"))
     except Exception as e:
         log(f"❌ OSTIA 換算失敗：{e}")
