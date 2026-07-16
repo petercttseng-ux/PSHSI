@@ -323,10 +323,10 @@ function buildTraces() {
     });
   }
 
-  // Chlorophyll overlay：綠色空心圓，圓越大＝濃度越高（僅顯示 ≥0.1 mg/m³）
+  // Chlorophyll overlay：綠色空心圓，圓越大＝濃度越高（GlobColour L4，僅顯示 ≥0.5 mg/m³）
   if (state.chlOverlay && state.chlOverlay.chl && !isChl) {
     const cs = state.chlOverlay;
-    const thr = cs.threshold ?? 0.1;
+    const thr = cs.threshold ?? 0.5;
     // 以 log10(chl) 線性映射到圓徑，再乘上使用者選的圓圈大小倍率
     const lmin = Math.log10(thr), lmax = Math.log10(10);
     const k = state.chlScale || 1.0;
@@ -346,7 +346,7 @@ function buildTraces() {
       },
       customdata: cs.chl,
       hovertemplate: "<b>葉綠素-a</b> %{customdata:.3f} mg/m³<br>" +
-        "%{x:.2f}°E, %{y:.2f}°N<extra>VIIRS 水色</extra>",
+        "%{x:.2f}°E, %{y:.2f}°N<extra>GlobColour L4 水色</extra>",
       showlegend: false, name: "Chl",
     });
   }
@@ -1521,7 +1521,7 @@ async function toggleChlOverlay(on) {
   try {
     const d = await api(`/api/overlay/chl?date=${date}`);
     state.chlOverlay = d;
-    appendLocalLog(`🟢 水色（MODIS）疊圖：${d.date} · ${d.count} 點` +
+    appendLocalLog(`🟢 水色（GlobColour L4）疊圖：${d.date} · ${d.count} 點` +
       `${d.date !== date ? `（${date} 尚未發布，改用最新可用）` : ""}`);
     await drawPlot(true);
   } catch (e) {
