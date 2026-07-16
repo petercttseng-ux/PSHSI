@@ -927,3 +927,11 @@ input[type="date"], input[type="text"] {
 }
 .cop-btn-row { display: flex; gap: 6px; margin-top: 4px; }
 .cop-btn-row .btn { flex: 1; }
+
+/* 漁場預測：當日環境資料來源日期 */
+.hsi-src {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-faint);
+}

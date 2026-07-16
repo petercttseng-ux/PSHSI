@@ -881,11 +881,17 @@ function renderHsiRanges(species) {
   }
   const sp = state.hsiParams.species[species];
   const r = sp.ranges;
-  box.innerHTML =
+  let html =
     `<span class="hsi-sp"><b>${sp.name_zh}　${sp.name_en}</b>（n=${sp.n} 筆漁獲）最適環境範圍：</span>` +
     `SST ${r.SST.optimal[0]}–${r.SST.optimal[1]} °C<br>` +
     `Chl-a ${r.Chla.optimal[0]}–${r.Chla.optimal[1]} mg/m³<br>` +
     `SSHA ${r.SSHA.optimal[0]}–${r.SSHA.optimal[1]} cm`;
+  const s = state.sst && state.sst.kind === "hsi" ? state.sst.sources : null;
+  if (s) {
+    html += `<br><span class="hsi-src">當日環境資料（Copernicus）：` +
+            `SST ${s.sst} · Chl-a ${s.chl} · SSHA ${s.ssha}</span>`;
+  }
+  box.innerHTML = html;
 }
 
 async function predictHabitat(species) {
