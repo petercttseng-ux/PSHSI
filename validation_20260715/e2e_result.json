@@ -1,0 +1,29 @@
+{
+  "region": {
+    "lat": [
+      -20,
+      20
+    ],
+    "lon_0360": [
+      130,
+      210
+    ],
+    "lon_label": "130°E–150°W"
+  },
+  "stats": {
+    "skipjack": {
+      "min": 0.0,
+      "max": 1.0,
+      "mean": 0.056,
+      "hot_cells>=0.75": 2572,
+      "finite_cells": 51681
+    },
+    "yellowfin": {
+      "min": 0.0,
+      "max": 1.0,
+      "mean": 0.066,
+      "hot_cells>=0.75": 2988,
+      "finite_cells": 51681
+    }
+  }
+}
