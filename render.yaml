@@ -1,0 +1,15 @@
+# Render Blueprint — 鰹鮪 ECDF-HSI 漁場預測系統
+# 於 Render Dashboard → New → Blueprint → 選擇此 GitHub repo 即自動建立服務
+services:
+  - type: web
+    name: fri-hsi
+    runtime: docker
+    region: singapore          # 距台灣最近
+    plan: standard             # 2GB RAM（netCDF 處理所需；starter 512MB 不足）
+    dockerfilePath: ./webapp/Dockerfile
+    dockerContext: .
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NASA_EARTHDATA_TOKEN
+        sync: false            # 部署時於 Dashboard 手動填入，不進版控

@@ -125,6 +125,22 @@ def index():
     return render_template("index.html")
 
 
+# ── PWA（Android「加入主畫面」安裝支援）───────────────────────────────
+@app.route("/sw.js")
+def service_worker():
+    """Service worker 必須從根路徑提供，scope 才能涵蓋整個站台。"""
+    resp = send_from_directory(str(APP_ROOT / "static"), "sw.js",
+                               mimetype="application/javascript")
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
+@app.route("/manifest.webmanifest")
+def web_manifest():
+    return send_from_directory(str(APP_ROOT / "static"), "manifest.webmanifest",
+                               mimetype="application/manifest+json")
+
+
 @app.route("/api/token_status")
 def api_token_status():
     return jsonify(sp.check_credentials())
@@ -985,23 +1001,4 @@ def favicon():
 # ── Main ───────────────────────────────────────────────────────────────────
 def main():
     import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8765)
-    parser.add_argument("--no-browser", action="store_true")
-    parser.add_argument("--no-autoload", action="store_true")
-    args = parser.parse_args()
-
-    _check_token_at_startup()
-    if not args.no_autoload:
-        threading.Thread(target=_autoload, daemon=True).start()
-
-    if not args.no_browser:
-        url = f"http://{args.host}:{args.port}"
-        threading.Timer(1.2, lambda: webbrowser.open(url)).start()
-
-    app.run(host=args.host, port=args.port, debug=False, threaded=True)
-
-
-if __name__ == "__main__":
-    main()
+ 
