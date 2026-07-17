@@ -377,4 +377,28 @@
   </div>
 </div>
 
-<!-- ╔══ FOOTER ═════════════════════════════════════════════
+<!-- ╔══ FOOTER ══════════════════════════════════════════════════ ╗ -->
+<footer class="app-footer">
+  <div class="footer-left">
+    <span id="statusBar">就緒 │ 請下載或載入 NetCDF 資料</span>
+  </div>
+  <div class="footer-right">
+    <span class="dim">© 農業部水產試驗所 漁海況研究小組</span>
+    <span class="sep">·</span>
+    <span class="dim">資料來源：NASA JPL PO.DAAC / NOAA CoastWatch</span>
+  </div>
+</footer>
+
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+<script>
+  // PWA：註冊 service worker（需 HTTPS 或 localhost）
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js").catch((err) => {
+        console.warn("Service worker 註冊失敗：", err);
+      });
+    });
+  }
+</script>
+</body>
+</html>

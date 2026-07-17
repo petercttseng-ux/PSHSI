@@ -1001,4 +1001,23 @@ def favicon():
 # ── Main ───────────────────────────────────────────────────────────────────
 def main():
     import argparse
- 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--no-autoload", action="store_true")
+    args = parser.parse_args()
+
+    _check_token_at_startup()
+    if not args.no_autoload:
+        threading.Thread(target=_autoload, daemon=True).start()
+
+    if not args.no_browser:
+        url = f"http://{args.host}:{args.port}"
+        threading.Timer(1.2, lambda: webbrowser.open(url)).start()
+
+    app.run(host=args.host, port=args.port, debug=False, threaded=True)
+
+
+if __name__ == "__main__":
+    main()
